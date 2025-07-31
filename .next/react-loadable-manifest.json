@@ -501,12 +501,6 @@
     "id": "node_modules\\@reown\\appkit\\node_modules\\@walletconnect\\utils\\node_modules\\viem\\_esm\\utils\\signature\\recoverPublicKey.js -> @noble/curves/secp256k1",
     "files": []
   },
-  "node_modules\\@wagmi\\core\\dist\\chunk-TSH6VVF4.js -> viem/ens": {
-    "id": "node_modules\\@wagmi\\core\\dist\\chunk-TSH6VVF4.js -> viem/ens",
-    "files": [
-      "static/chunks/_pages-dir-browser_node_modules_viem__esm_ens_index_js.js"
-    ]
-  },
   "node_modules\\@walletconnect\\ethereum-provider\\dist\\index.es.js -> @reown/appkit/core": {
     "id": "node_modules\\@walletconnect\\ethereum-provider\\dist\\index.es.js -> @reown/appkit/core",
     "files": [

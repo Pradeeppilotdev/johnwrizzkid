@@ -12,12 +12,14 @@
   "license": "ISC",
   "dependencies": {
     "@privy-io/react-auth": "^1.99.1",
+    "@privy-io/wagmi": "^1.0.5",
     "@privy-io/wagmi-connector": "^0.1.13",
+    "@tanstack/react-query": "^5.83.1",
     "next": "^15.3.4",
     "permissionless": "^0.2.10",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "viem": "^2.21.36",
+    "viem": "^2.33.2",
     "wagmi": "^1.4.13"
   },
   "devDependencies": {

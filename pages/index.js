@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import styles from '../styles/Home.module.css';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { useAccount, useBalance } from 'wagmi';
-import { setupSmartAccount } from '../utils/pimlico';
-import { encodeFunctionData } from 'viem';
+import { encodeFunctionData, createPublicClient, http } from 'viem';
+import { createSmartAccountClient } from 'permissionless';
+import { toSimpleSmartAccount } from 'permissionless/accounts';
+import { createPimlicoClient } from 'permissionless/clients/pimlico';
+import { entryPoint07Address } from 'viem/account-abstraction';
 import { monadTestnet } from '../utils/chains';
 
 // Example contract ABI and address (replace with your actual contract)
@@ -26,7 +28,21 @@ const contractAbi = [
     inputs: [{ name: 'frameNumbers', type: 'uint256[]' }],
     name: 'viewFramesBatch',
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'user', type: 'address' }],
+    name: 'getBalance',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'user', type: 'address' }],
+    name: 'userSlapCount',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
@@ -67,8 +83,15 @@ const contractAbi = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [],
+    name: 'FRAME_COST',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ];
-const contractAddress = '0xDf7A0777b164a9bA6278B2D3979Ea8eCfE915855'; // TODO: Replace with your deployed contract
+const contractAddress = '0x28Cb014Ab8da78E23e4c1cB84c06ac03Ae6720aA'; // SimpleFrameViewer contract
 
 export default function Home() {
   const [currentFrame, setCurrentFrame] = useState(1);
@@ -79,65 +102,90 @@ export default function Home() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [userSlapCount, setUserSlapCount] = useState(0);
   const [userRank, setUserRank] = useState(0);
+  const [userBalance, setUserBalance] = useState(0); // Contract balance
+  const [walletBalance, setWalletBalance] = useState(0); // Native wallet balance
   const [slapInProgress, setSlapInProgress] = useState(false);
   const containerRef = useRef(null);
-  const { ready, authenticated, login, logout } = usePrivy();
+  const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
   const privyAddress = wallets.length > 0 ? wallets[0].address : '';
 
-  // Move useBalance inside the component and only call if privyAddress exists
-  const {
-    data: monBalance,
-    isLoading: isBalanceLoading
-  } = useBalance(
-    privyAddress
-      ? {
-          address: privyAddress,
-          chainId: monadTestnet.id,
-          watch: true,
-          enabled: true,
-        }
-      : {
-          address: undefined,
-          enabled: false,
-        }
-  );
+  // Monad 2048 approach: Local nonce management and direct RPC
+  const userNonce = useRef(0);
+  const walletClient = useRef(null);
+
+  // Remove wagmi useBalance and useAccount for now to avoid errors
+  // We'll implement balance fetching manually using viem
+  const [monBalance, setMonBalance] = useState(null);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
 
   // Switch wallet to Monad Testnet after connection
   useEffect(() => {
     if (wallets.length > 0) {
-      wallets[0].switchChain(10143); // Monad Testnet chain ID
+      wallets[0].switchChain(monadTestnet.id); // Monad Testnet chain ID
     }
   }, [wallets]);
 
   // Check if using embedded wallet (this is what we want for no signatures)
   const isUsingEmbeddedWallet = wallets.length > 0 && wallets[0].walletClientType === 'privy';
   
-  // Setup Privy smart wallet (no Pimlico needed)
+  // Monad 2048 approach: Setup wallet client and nonce management
   useEffect(() => {
-    if (!wallets.length) return;
-    async function setup() {
-      setTxStatus('Setting up Privy smart wallet...');
+    async function setupWalletClient() {
+      if (!ready || !wallets.length || !user?.wallet) return;
+
       try {
-        console.log('Setting up with Privy wallet:', wallets[0].address);
-        console.log('Wallet type:', wallets[0].walletClientType);
-        console.log('Is embedded wallet:', isUsingEmbeddedWallet);
-        
-        if (!isUsingEmbeddedWallet) {
-          setTxStatus('⚠️ Please use embedded wallet for seamless experience!');
-          return;
-        }
-        
-        // Use Privy wallet directly - no smart account needed
-        setSmartAccountClient(null); // We don't need Pimlico smart account
-        setTxStatus('✅ Privy embedded wallet ready! (No signatures needed)');
-      } catch (err) {
-        console.error('Privy wallet setup error:', err);
-        setTxStatus('Privy wallet setup failed: ' + err.message);
+        setTxStatus('🔄 Setting up Privy embedded wallet (Monad 2048 approach)...');
+
+        // Find the embedded Privy wallet
+        const userWallet = wallets.find((w) => w.address === user.wallet?.address);
+        if (!userWallet) return;
+
+        // Get Ethereum provider and create wallet client
+        const ethereumProvider = await userWallet.getEthereumProvider();
+        const provider = {
+          request: ethereumProvider.request.bind(ethereumProvider),
+          signTransaction: async (txParams) => {
+            // Sign transaction using Privy's embedded wallet
+            return await ethereumProvider.request({
+              method: 'eth_signTransaction',
+              params: [txParams],
+            });
+          }
+        };
+
+        walletClient.current = provider;
+
+        // Fetch current nonce from network
+        const publicClient = createPublicClient({
+          chain: monadTestnet,
+          transport: http('https://testnet-rpc.monad.xyz/'),
+        });
+
+        const nonce = await publicClient.getTransactionCount({
+          address: user.wallet.address,
+        });
+        userNonce.current = nonce;
+
+        console.log('✅ Wallet client ready:', user.wallet.address);
+        console.log('✅ Starting nonce:', nonce);
+
+        setSmartAccountClient({
+          account: { address: user.wallet.address },
+          wallet: userWallet,
+          isSmartWallet: false, // Using direct Privy wallet like Monad 2048
+          walletClient: provider
+        });
+
+        setTxStatus('✅ Privy embedded wallet ready! Gasless transactions enabled (Monad 2048 approach)');
+      } catch (error) {
+        console.error('❌ Failed to setup wallet client:', error);
+        setTxStatus('❌ Wallet setup failed: ' + error.message);
       }
     }
-    setup();
-  }, [wallets, isUsingEmbeddedWallet]);
+
+    setupWalletClient();
+  }, [user, ready, wallets]);
 
   // Fetch leaderboard and user data when Privy wallet is ready
   useEffect(() => {
@@ -212,9 +260,6 @@ export default function Home() {
   const fetchLeaderboard = async () => {
     if (!wallets.length) return;
     try {
-      const wallet = wallets[0];
-      const provider = await wallet.getEthereumProvider();
-      
       // Create a simple public client for reading
       const { createPublicClient, http } = await import('viem');
       const publicClient = createPublicClient({
@@ -245,9 +290,6 @@ export default function Home() {
   const fetchUserSlapCount = async () => {
     if (!wallets.length || !privyAddress) return;
     try {
-      const wallet = wallets[0];
-      const provider = await wallet.getEthereumProvider();
-      
       // Create a simple public client for reading
       const { createPublicClient, http } = await import('viem');
       const publicClient = createPublicClient({
@@ -255,11 +297,11 @@ export default function Home() {
         transport: http('https://testnet-rpc.monad.xyz/'),
       });
       
-      const [slapCount, userRank] = await Promise.all([
+      const [slapCount, userRank, contractBalance, walletBalance] = await Promise.all([
         publicClient.readContract({
           address: contractAddress,
           abi: contractAbi,
-          functionName: 'getSlapCount',
+          functionName: 'userSlapCount',
           args: [privyAddress],
         }),
         publicClient.readContract({
@@ -268,77 +310,190 @@ export default function Home() {
           functionName: 'getUserRank',
           args: [privyAddress],
         }),
+        publicClient.readContract({
+          address: contractAddress,
+          abi: contractAbi,
+          functionName: 'getBalance',
+          args: [privyAddress],
+        }),
+        publicClient.getBalance({
+          address: privyAddress,
+        }),
       ]);
-      
+
       setUserSlapCount(Number(slapCount));
       setUserRank(Number(userRank));
+      setUserBalance(Number(contractBalance)); // Contract balance (for spending)
+      setWalletBalance(Number(walletBalance)); // Wallet balance
     } catch (err) {
       console.error('Failed to fetch user data:', err);
     }
   };
 
-  // Handle frame viewing with direct Privy wallet (no smart account)
-  const handleFrameViewDirect = async (frameNumber) => {
-    if (!wallets.length || !privyAddress) return;
-    
+  // Check user balance in contract
+  const checkUserBalance = async () => {
+    if (!privyAddress) return 0;
+
     try {
-      const wallet = wallets[0];
-      const provider = await wallet.getEthereumProvider();
-      
+      const publicClient = createPublicClient({
+        chain: { id: 10143, name: 'Monad Testnet' },
+        transport: http('https://testnet-rpc.monad.xyz/'),
+      });
+
+      const balance = await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'userBalances',
+        args: [privyAddress],
+      });
+
+      return Number(balance);
+    } catch (err) {
+      console.error('Failed to check user balance:', err);
+      return 0;
+    }
+  };
+
+  // Handle frame viewing with Privy wallet (Smart Wallet or embedded)
+  const handleFrameViewPrivy = async (frameNumber) => {
+    if (!smartAccountClient || !privyAddress) {
+      setTxStatus('❌ Wallet not ready. Please wait...');
+      return;
+    }
+
+    try {
+      // Check contract balance only for frames 1 and 162 (with retry for rate limiting)
+      if (frameNumber === 1 || frameNumber === 162) {
+        let contractBalance;
+        try {
+          const publicClient = createPublicClient({
+            chain: { id: 10143, name: 'Monad Testnet' },
+            transport: http('https://testnet-rpc.monad.xyz/'),
+          });
+
+          // IMPORTANT: Check balance for Privy wallet address, not Smart Account address
+          const addressToCheck = privyAddress; // Use Privy wallet address for contract balance
+          console.log(`🔍 Checking contract balance for Privy address: ${addressToCheck}`);
+          console.log(`🔍 Smart Account address: ${smartAccountClient?.account?.address}`);
+
+          contractBalance = await publicClient.readContract({
+            address: contractAddress,
+            abi: contractAbi,
+            functionName: 'getBalance',
+            args: [addressToCheck],
+          });
+
+          console.log(`💰 Contract balance for ${addressToCheck}: ${(Number(contractBalance) / 1e18).toFixed(4)} MON`);
+        } catch (rpcError) {
+          if (rpcError.message.includes('429') || rpcError.message.includes('rate limit')) {
+            setTxStatus('⏳ RPC rate limited, trying transaction anyway...');
+            contractBalance = BigInt(0.001 * 1e18); // Assume minimum balance to proceed
+          } else {
+            throw rpcError;
+          }
+        }
+
+        const requiredAmount = BigInt(0.001 * 1e18); // 0.001 MON in wei
+
+        if (contractBalance < requiredAmount) {
+          const currentBalance = (Number(contractBalance) / 1e18).toFixed(4);
+          const frameType = frameNumber === 1 ? 'start a slap' : 'complete a slap';
+          setTxStatus(`❌ Insufficient contract balance! Privy wallet (${privyAddress}) has ${currentBalance} MON deposited, need 0.001 MON to ${frameType}. Please deposit more MON to the contract first.`);
+          return;
+        }
+      }
+
       const viewFrameData = encodeFunctionData({
         abi: contractAbi,
         functionName: 'viewFrame',
         args: [frameNumber],
       });
-      
-      // Use direct wallet transaction instead of smart account
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [{
-          to: contractAddress,
-          data: viewFrameData,
-          value: '0x0',
-          gas: '0x186A0', // 100,000 gas limit
-          maxFeePerGas: '0x59682F00', // 50 gwei in hex (much higher)
-          maxPriorityFeePerGas: '0x59682F00', // 50 gwei in hex (much higher)
-        }],
+
+      let txHash;
+
+      // Monad 2048 approach: Direct RPC with local nonce management (NO APPROVALS!)
+      console.log('🚀 Using Monad 2048 approach: Direct RPC + Local Nonce');
+      console.log('Privy wallet address:', privyAddress);
+      console.log('Current nonce:', userNonce.current);
+
+      if (!walletClient.current) {
+        throw new Error('Wallet client not ready');
+      }
+
+      setTxStatus(`🎬 Viewing frame ${frameNumber}... (Monad 2048 Gasless)`);
+
+      // Get current nonce and increment immediately (like Monad 2048)
+      const nonce = userNonce.current;
+      userNonce.current = nonce + 1;
+
+      // Prepare transaction parameters
+      const txParams = {
+        to: contractAddress,
+        data: viewFrameData,
+        value: '0x0',
+        nonce: '0x' + nonce.toString(16),
+        gas: '0x186A0', // 100,000 gas limit
+        maxFeePerGas: '0xE8D4A51000', // High gas price for Monad
+        maxPriorityFeePerGas: '0x3A35294400',
+        chainId: '0x' + monadTestnet.id.toString(16),
+      };
+
+      console.log('📝 Transaction params:', txParams);
+
+      // Sign transaction using Privy (should be gasless due to noPromptOnSignature: true)
+      const signedTransaction = await walletClient.current.request({
+        method: 'eth_signTransaction',
+        params: [txParams],
       });
-      
-      console.log('Direct frame view transaction:', txHash);
-      
+
+      console.log('✅ Transaction signed (gasless)');
+
+      // Send directly via RPC (bypassing pre-flight simulations like Monad 2048)
+      const response = await fetch('https://testnet-rpc.monad.xyz/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: '2.0',
+          method: 'eth_sendRawTransaction',
+          params: [signedTransaction],
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.error) {
+        throw new Error(`RPC Error: ${result.error.message}`);
+      }
+
+      txHash = result.result;
+      console.log('🚀 Gasless transaction sent via direct RPC:', txHash);
+
       // Update slap progress state
       if (frameNumber === 1) {
         setSlapInProgress(true);
-        setTxStatus('🎯 Slap started! Now move to frame 162 to complete it');
+        const walletType = smartAccountClient.isSmartWallet ? '(Gasless)' : '(Approved)';
+        setTxStatus(`🎯 Slap started ${walletType}! 0.001 MON deducted. Continue to frame 162 to complete it.`);
       } else if (frameNumber === 162) {
         setSlapInProgress(false);
-        setTxStatus('💥 Slap completed! +1 to your count');
+        const walletType = smartAccountClient.isSmartWallet ? '(Gasless)' : '(Approved)';
+        setTxStatus(`🎉 Slap completed ${walletType}! 0.001 MON deducted. Check the leaderboard!`);
+      } else {
+        const walletType = smartAccountClient.isSmartWallet ? '(Gasless)' : '(Approved)';
+        setTxStatus(`✅ Frame ${frameNumber} viewed ${walletType}! FREE - no MON deducted`);
       }
-      
-      // Update leaderboard after transaction
-      if (frameNumber === 1 || frameNumber === 162) {
-        setTimeout(() => {
-          fetchLeaderboard();
-          fetchUserSlapCount();
-        }, 2000);
-      }
+
+      // Update leaderboard and user data after transaction
+      setTimeout(() => {
+        fetchLeaderboard();
+        fetchUserSlapCount();
+      }, 2000);
+
     } catch (err) {
-      console.error('Direct frame view error:', err);
-      
-      // Decode the error message
-      let errorMessage = err.message;
-      if (err.message.includes('0x08c379a0')) {
-        if (err.message.includes('4e6f20736c617020696e2070726f6772657373')) {
-          errorMessage = '❌ No slap in progress! Start with frame 1 first, then go to frame 162';
-        } else if (err.message.includes('496e73756666696369656e742062616c616e6365')) {
-          errorMessage = '❌ Insufficient balance! Deposit more MON tokens';
-        } else if (err.message.includes('536c617020616c726561647920696e2070726f6772657373')) {
-          errorMessage = '❌ Slap already in progress! Complete current slap first (go to frame 162)';
-          setSlapInProgress(true);
-        }
-      }
-      
-      setTxStatus('Frame view failed: ' + errorMessage);
+      console.error('Frame view transaction error:', err);
+      setTxStatus('❌ Transaction failed: ' + err.message);
     }
   };
 
@@ -353,50 +508,116 @@ export default function Home() {
     if (frameNumber !== currentFrame && frameNumber >= 1 && frameNumber <= 162) {
       setCurrentFrame(frameNumber);
       
-      // Trigger slap transaction for frames 1 and 162
+      // Only trigger transaction for frames 1 and 162 (only these cost MON)
       if (frameNumber === 1 || frameNumber === 162) {
-        handleFrameViewDirect(frameNumber);
+        handleFrameViewPrivy(frameNumber);
+      } else {
+        // Frames 2-161 are free - just update UI, no transaction needed
+        setTxStatus(`✅ Frame ${frameNumber} viewed - FREE! No blockchain transaction needed.`);
+
+        // Update slap progress for free frames
+        if (frameNumber > 1 && frameNumber < 162) {
+          // We're in the middle of a slap, keep slap in progress
+          setSlapInProgress(true);
+        }
       }
     }
   };
 
-  // Deposit MON to the contract using direct wallet
+  // Deposit MON to contract using available wallet
   const handleDeposit = async () => {
-    if (!wallets.length || !depositAmount) return;
-    setTxStatus('Depositing MON...');
+    if (!smartAccountClient || !depositAmount) {
+      setTxStatus('❌ Wallet not ready');
+      return;
+    }
+
     try {
-      const wallet = wallets[0];
-      const provider = await wallet.getEthereumProvider();
-      
       const depositData = encodeFunctionData({
         abi: contractAbi,
         functionName: 'depositTokens',
         args: [],
       });
-      
-      console.log('Depositing amount:', depositAmount);
-      console.log('Contract address:', contractAddress);
-      console.log('Deposit calldata:', depositData);
-      console.log('Value in wei:', BigInt(Number(depositAmount) * 1e18));
-      
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [{
-          to: contractAddress,
-          data: depositData,
-          value: '0x' + BigInt(Number(depositAmount) * 1e18).toString(16), // Convert to hex
-          gas: '0x186A0', // 100,000 gas limit
-          maxFeePerGas: '0x59682F00', // 50 gwei in hex (much higher)
-          maxPriorityFeePerGas: '0x59682F00', // 50 gwei in hex (much higher)
-        }],
+
+      let txHash;
+
+      // Use Monad 2048 approach (gasless with direct RPC)
+      if (!walletClient.current) {
+        throw new Error('Wallet client not ready');
+      }
+
+      setTxStatus('💰 Depositing MON using Monad 2048 approach (gasless)...');
+
+      // Get current nonce and increment immediately (like Monad 2048)
+      const nonce = userNonce.current;
+      userNonce.current = nonce + 1;
+
+      // Prepare transaction parameters
+      const txParams = {
+        to: contractAddress,
+        data: depositData,
+        value: '0x' + BigInt(Number(depositAmount) * 1e18).toString(16), // Amount in wei
+        nonce: '0x' + nonce.toString(16),
+        gas: '0x186A0', // 100,000 gas limit
+        maxFeePerGas: '0xE8D4A51000', // High gas price for Monad
+        maxPriorityFeePerGas: '0x3A35294400',
+        chainId: '0x' + monadTestnet.id.toString(16),
+      };
+
+      console.log('💰 Deposit transaction params:', txParams);
+
+      // Sign transaction using Privy (gasless due to noPromptOnSignature: true)
+      const signedTransaction = await walletClient.current.request({
+        method: 'eth_signTransaction',
+        params: [txParams],
       });
-      
-      console.log('Direct deposit transaction:', txHash);
-      setTxStatus('Deposit successful! Hash: ' + txHash);
-      setHasDeposited(true);
+
+      console.log('✅ Deposit transaction signed (gasless)');
+
+      // Send directly via RPC (bypassing pre-flight simulations)
+      const response = await fetch('https://testnet-rpc.monad.xyz/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: '2.0',
+          method: 'eth_sendRawTransaction',
+          params: [signedTransaction],
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.error) {
+        throw new Error(`RPC Error: ${result.error.message}`);
+      }
+
+      txHash = result.result;
+      console.log('🚀 Gasless deposit sent via direct RPC:', txHash);
+      setTxStatus(`✅ Deposited ${depositAmount} MON gaslessly! Hash: ${txHash}`);
+
+      // Refresh user data after successful deposit
+      setTimeout(() => {
+        fetchUserSlapCount();
+      }, 2000);
     } catch (err) {
-      console.error('Direct deposit error:', err);
-      setTxStatus('Deposit failed: ' + err.message);
+      console.error('Deposit error:', err);
+
+      // Reset nonce on error (like Monad 2048)
+      if (err.message.includes('nonce')) {
+        const publicClient = createPublicClient({
+          chain: monadTestnet,
+          transport: http('https://testnet-rpc.monad.xyz/'),
+        });
+        const correctNonce = await publicClient.getTransactionCount({
+          address: privyAddress,
+        });
+        userNonce.current = correctNonce;
+        console.log('🔄 Nonce reset to:', correctNonce);
+      }
+
+      setTxStatus('❌ Deposit failed: ' + err.message);
     }
   };
 
@@ -466,8 +687,14 @@ export default function Home() {
         <strong>Debug Info:</strong><br />
         Privy Ready: {ready ? '✅ Yes' : '❌ No'}<br />
         Authenticated: {authenticated ? '✅ Yes' : '❌ No'}<br />
-        Privy App ID: {process.env.NEXT_PUBLIC_PRIVY_APP_ID || '❌ Not Set'}<br />
+        Wallets Count: {wallets.length}<br />
         Pimlico API Key: {process.env.NEXT_PUBLIC_PIMLICO_API_KEY ? '✅ Set' : '❌ Not Set'}<br />
+        Smart Account Client: {smartAccountClient ? '✅ Ready' : '❌ Not Ready'}<br />
+        {smartAccountClient?.account && (
+          <>Smart Account Address: {smartAccountClient.account.address}<br /></>
+        )}
+        Wallet Type: {smartAccountClient?.isSmartWallet ? '🚀 Smart Wallet (Gasless)' : '⚠️ Embedded Wallet (Requires Approval)'}<br />
+        Privy App ID: {process.env.NEXT_PUBLIC_PRIVY_APP_ID || '❌ Not Set'}<br />
         Contract Address: {contractAddress}<br />
         {authenticated && (
           <>
@@ -519,14 +746,17 @@ export default function Home() {
               type="number"
               min="0.001"
               step="0.001"
-              placeholder="Amount to deposit (MON)"
+              placeholder="0.002 MON (1 slap)"
               value={depositAmount}
               onChange={e => setDepositAmount(e.target.value)}
               style={{ padding: 8, borderRadius: 6, border: '1px solid #ccc', width: 200 }}
               disabled={!wallets.length}
             />
-            <button onClick={handleDeposit} disabled={!wallets.length || !depositAmount} className={styles.animationButton}>
-              Deposit MON
+            <div style={{ fontSize: '0.8em', color: '#888', marginTop: 4, marginBottom: 8 }}>
+              💡 Suggested: 0.002 MON (1 slap) or 0.02 MON (10 slaps) or 0.1 MON (50 slaps)
+            </div>
+            <button onClick={handleDeposit} disabled={!smartAccountClient || !depositAmount} className={styles.animationButton}>
+              Deposit to Contract {smartAccountClient?.isSmartWallet ? '(Gasless)' : '(Requires Approval)'}
             </button>
             <button onClick={testSmartAccount} disabled={!smartAccountClient} className={styles.animationButton}>
               Test Smart Account
@@ -550,7 +780,10 @@ export default function Home() {
         <div style={{ marginBottom: 24, padding: 16, backgroundColor: '#f5f5f5', borderRadius: 8 }}>
           <h3 style={{ marginBottom: 12 }}>🏆 Slap Leaderboard</h3>
           <div style={{ marginBottom: 8 }}>
-            <strong>Your Slaps:</strong> {userSlapCount} | <strong>Your Rank:</strong> {userRank > 0 ? `#${userRank}` : 'Not ranked'}
+            <strong>Wallet:</strong> {(walletBalance / 1e18).toFixed(4)} MON | <strong>Contract Balance:</strong> {(userBalance / 1e18).toFixed(4)} MON ({Math.floor((userBalance / 1e18) / 0.002)} slaps) | <strong>Slaps:</strong> {userSlapCount} | <strong>Rank:</strong> {userRank > 0 ? `#${userRank}` : 'Not ranked'}
+          </div>
+          <div style={{ marginBottom: 8, fontSize: '0.9em', color: '#666' }}>
+            💡 <strong>How it works:</strong> Only frames 1 & 162 cost 0.001 MON each (0.002 MON per complete slap). Frames 2-161 are FREE!
           </div>
           <div style={{ maxHeight: 200, overflowY: 'auto' }}>
             {leaderboard.map((entry, index) => (

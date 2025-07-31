@@ -47,12 +47,12 @@ export async function setupSmartAccount(wallet, pimlicoApiKey) {
             return gasPrice.fast;
           } catch (error) {
             console.error('Failed to get gas price from Pimlico:', error);
-            // Fallback gas price for Monad testnet - MUCH HIGHER VALUES
+            // Fallback gas price for Monad testnet - VERY HIGH VALUES
             console.log('Using fallback gas price for Monad testnet');
             return {
-              feePerGas: 10000000000n, // 10 gwei (much higher)
-              maxFeePerGas: 20000000000n, // 20 gwei (much higher)
-              maxPriorityFeePerGas: 10000000000n, // 10 gwei (much higher)
+              feePerGas: 500000000000n, // 500 gwei (extremely high)
+              maxFeePerGas: 1000000000000n, // 1000 gwei (extremely high)
+              maxPriorityFeePerGas: 250000000000n, // 250 gwei (extremely high)
             };
           }
         },
