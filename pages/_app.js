@@ -5,7 +5,7 @@ import { monadTestnet } from '../utils/chains';
 export default function App({ Component, pageProps }) {
   return (
     <PrivyProvider
-      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID}
+      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || 'clxxx-placeholder-for-build'}
       config={{
         embeddedWallets: {
           createOnLogin: 'all-users',
