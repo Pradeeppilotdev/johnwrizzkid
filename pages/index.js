@@ -426,15 +426,28 @@ export default function Home() {
       const nonce = userNonce.current;
       userNonce.current = nonce + 1;
 
-      // Prepare transaction parameters
+      // Get current gas prices from network (much cheaper!)
+      const publicClient = createPublicClient({
+        chain: monadTestnet,
+        transport: http('https://testnet-rpc.monad.xyz/'),
+      });
+
+      const gasPrice = await publicClient.getGasPrice();
+      const maxFeePerGas = gasPrice * 2n; // 2x current gas price for faster inclusion
+      const maxPriorityFeePerGas = gasPrice / 10n; // Small tip
+
+      console.log('⛽ Current gas price:', (Number(gasPrice) / 1e9).toFixed(2), 'gwei');
+      console.log('⛽ Using maxFeePerGas:', (Number(maxFeePerGas) / 1e9).toFixed(2), 'gwei');
+
+      // Prepare transaction parameters with reasonable gas prices
       const txParams = {
         to: contractAddress,
         data: viewFrameData,
         value: '0x0',
         nonce: '0x' + nonce.toString(16),
         gas: '0x186A0', // 100,000 gas limit
-        maxFeePerGas: '0xE8D4A51000', // High gas price for Monad
-        maxPriorityFeePerGas: '0x3A35294400',
+        maxFeePerGas: '0x' + maxFeePerGas.toString(16),
+        maxPriorityFeePerGas: '0x' + maxPriorityFeePerGas.toString(16),
         chainId: '0x' + monadTestnet.id.toString(16),
       };
 
@@ -474,15 +487,12 @@ export default function Home() {
       // Update slap progress state
       if (frameNumber === 1) {
         setSlapInProgress(true);
-        const walletType = smartAccountClient.isSmartWallet ? '(Gasless)' : '(Approved)';
-        setTxStatus(`🎯 Slap started ${walletType}! 0.001 MON deducted. Continue to frame 162 to complete it.`);
+        setTxStatus(`🎯 Slap started (Gasless)! 0.001 MON deducted. Continue to frame 162 to complete it.`);
       } else if (frameNumber === 162) {
         setSlapInProgress(false);
-        const walletType = smartAccountClient.isSmartWallet ? '(Gasless)' : '(Approved)';
-        setTxStatus(`🎉 Slap completed ${walletType}! 0.001 MON deducted. Check the leaderboard!`);
+        setTxStatus(`🎉 Slap completed (Gasless)! 0.001 MON deducted. Check the leaderboard!`);
       } else {
-        const walletType = smartAccountClient.isSmartWallet ? '(Gasless)' : '(Approved)';
-        setTxStatus(`✅ Frame ${frameNumber} viewed ${walletType}! FREE - no MON deducted`);
+        setTxStatus(`✅ Frame ${frameNumber} viewed (Gasless)! FREE - no MON deducted`);
       }
 
       // Update leaderboard and user data after transaction
@@ -493,7 +503,22 @@ export default function Home() {
 
     } catch (err) {
       console.error('Frame view transaction error:', err);
-      setTxStatus('❌ Transaction failed: ' + err.message);
+
+      // Reset nonce on error (like Monad 2048)
+      if (err.message.includes('nonce') || err.message.includes('replacement')) {
+        const publicClient = createPublicClient({
+          chain: monadTestnet,
+          transport: http('https://testnet-rpc.monad.xyz/'),
+        });
+        const correctNonce = await publicClient.getTransactionCount({
+          address: privyAddress,
+        });
+        userNonce.current = correctNonce;
+        console.log('🔄 Nonce reset to:', correctNonce);
+        setTxStatus('❌ Transaction failed due to nonce issue. Nonce reset. Please try again.');
+      } else {
+        setTxStatus('❌ Transaction failed: ' + err.message);
+      }
     }
   };
 
@@ -551,15 +576,28 @@ export default function Home() {
       const nonce = userNonce.current;
       userNonce.current = nonce + 1;
 
-      // Prepare transaction parameters
+      // Get current gas prices from network (much cheaper!)
+      const publicClient = createPublicClient({
+        chain: monadTestnet,
+        transport: http('https://testnet-rpc.monad.xyz/'),
+      });
+
+      const gasPrice = await publicClient.getGasPrice();
+      const maxFeePerGas = gasPrice * 2n; // 2x current gas price for faster inclusion
+      const maxPriorityFeePerGas = gasPrice / 10n; // Small tip
+
+      console.log('⛽ Deposit gas price:', (Number(gasPrice) / 1e9).toFixed(2), 'gwei');
+      console.log('⛽ Using maxFeePerGas:', (Number(maxFeePerGas) / 1e9).toFixed(2), 'gwei');
+
+      // Prepare transaction parameters with reasonable gas prices
       const txParams = {
         to: contractAddress,
         data: depositData,
         value: '0x' + BigInt(Number(depositAmount) * 1e18).toString(16), // Amount in wei
         nonce: '0x' + nonce.toString(16),
         gas: '0x186A0', // 100,000 gas limit
-        maxFeePerGas: '0xE8D4A51000', // High gas price for Monad
-        maxPriorityFeePerGas: '0x3A35294400',
+        maxFeePerGas: '0x' + maxFeePerGas.toString(16),
+        maxPriorityFeePerGas: '0x' + maxPriorityFeePerGas.toString(16),
         chainId: '0x' + monadTestnet.id.toString(16),
       };
 
