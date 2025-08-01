@@ -500,15 +500,15 @@ export default function Home() {
       if (frameNumber === 1) {
         addTransactionNotification('success', '🥊 Punch Started!', txHash);
         setSlapInProgress(true);
-        setTxStatus(`🥊 Punch started (Gasless)! 0.001 MON deducted. Continue to frame 162 to complete it.`);
+        setTxStatus(`🥊 Punch started! 0.001 MON deducted. Continue to frame 162 to complete it.`);
       } else if (frameNumber === 162) {
         addTransactionNotification('success', '💥 Punch Completed!', txHash);
         setSlapInProgress(false);
         setSessionPunchCount(prev => prev + 1); // Increment session counter
-        setTxStatus(`💥 Punch completed (Gasless)! 0.001 MON deducted. Check the leaderboard!`);
+        setTxStatus(`💥 Punch completed! 0.001 MON deducted. Check the leaderboard!`);
       } else {
         addTransactionNotification('success', `✅ Frame ${frameNumber} Viewed`, txHash);
-        setTxStatus(`✅ Frame ${frameNumber} viewed (Gasless)! FREE - no MON deducted`);
+        setTxStatus(`✅ Frame ${frameNumber} viewed! FREE - no MON deducted`);
       }
 
       // Update leaderboard and user data after transaction
@@ -786,7 +786,7 @@ export default function Home() {
               JohnWRizzKid
             </h1>
             <p style={{ fontSize: '1.3rem', marginBottom: '3rem', color: '#333', lineHeight: '1.6' }}>
-              Experience the ultimate punch animation with <strong>gasless blockchain transactions</strong>!<br/>
+              Experience the ultimate punch animation with <strong>blockchain transactions</strong>!<br/>
               Only frames 1 & 162 cost 0.001 MON each. Frames 2-161 are completely FREE!
             </p>
             <button onClick={login} className={styles.connectButton}>
@@ -1104,7 +1104,7 @@ export default function Home() {
 
                   <div style={{ marginBottom: '1.5rem' }}>
                     <h3 style={{ color: '#4ecdc4', fontSize: '1.2rem', marginBottom: '0.5rem' }}>
-                      ⚡ Step 3: Gasless Magic
+                      ⚡ Step 3: Smart Transactions
                     </h3>
                     <p style={{ color: '#333', marginBottom: '0.5rem' }}>
                       • Only Frames 1 & 162 cost MON (0.001 each)
@@ -1113,7 +1113,7 @@ export default function Home() {
                       • Frames 2-161 are completely FREE!
                     </p>
                     <p style={{ color: '#333' }}>
-                      • No wallet signatures needed - fully gasless experience!
+                      • Efficient blockchain transactions for the best experience!
                     </p>
                   </div>
 

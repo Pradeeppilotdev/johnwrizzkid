@@ -11,9 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@privy-io/react-auth": "^1.99.1",
+    "@privy-io/react-auth": "^2.21.0",
     "@privy-io/wagmi": "^1.0.5",
-    "@privy-io/wagmi-connector": "^0.1.13",
     "@tanstack/react-query": "^5.83.1",
     "next": "^15.3.4",
     "permissionless": "^0.2.10",
