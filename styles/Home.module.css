@@ -247,6 +247,14 @@
   object-fit: cover;
   border-radius: 8px;
   box-shadow: 8px 8px 0px rgba(44, 44, 44, 0.1);
+  user-select: none;
+  pointer-events: none;
+  /* Performance optimizations for smooth animation */
+  will-change: auto;
+  image-rendering: auto;
+  transform: translateZ(0); /* Force hardware acceleration */
+  backface-visibility: hidden; /* Prevent flickering */
+  transition: none; /* Remove transitions for real-time updates */
 }
 
 .frameNumber {

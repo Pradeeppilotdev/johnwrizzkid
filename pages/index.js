@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import styles from '../styles/Home.module.css';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { encodeFunctionData, createPublicClient, http } from 'viem';
@@ -558,32 +558,47 @@ export default function Home() {
     }
   };
 
-  // Handle frame movement (mouse)
-  const handleMouseMove = (e) => {
-    if (!containerRef.current) return;
-    const container = containerRef.current;
-    const rect = container.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = x / rect.width;
-    const frameNumber = Math.floor(percentage * 162) + 1;
-    if (frameNumber !== currentFrame && frameNumber >= 1 && frameNumber <= 162) {
-      setCurrentFrame(frameNumber);
-      
-      // Only trigger transaction for frames 1 and 162 (only these cost MON)
-      if (frameNumber === 1 || frameNumber === 162) {
-        handleFrameViewPrivy(frameNumber);
-      } else {
-        // Frames 2-161 are free - just update UI, no transaction needed
-        setTxStatus(`✅ Frame ${frameNumber} viewed - FREE! No blockchain transaction needed.`);
+  // Throttled frame update for better performance
+  const frameUpdateRef = useRef(null);
 
-        // Update slap progress for free frames
-        if (frameNumber > 1 && frameNumber < 162) {
-          // We're in the middle of a slap, keep slap in progress
-          setSlapInProgress(true);
+  // Handle frame movement (mouse) with performance optimization
+  const handleMouseMove = useCallback((e) => {
+    if (!containerRef.current) return;
+
+    // Cancel previous frame update if still pending
+    if (frameUpdateRef.current) {
+      cancelAnimationFrame(frameUpdateRef.current);
+    }
+
+    // Use requestAnimationFrame for smooth updates
+    frameUpdateRef.current = requestAnimationFrame(() => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, x / rect.width)); // Clamp between 0-1
+      const frameNumber = Math.floor(percentage * 162) + 1;
+
+      if (frameNumber !== currentFrame && frameNumber >= 1 && frameNumber <= 162) {
+        setCurrentFrame(frameNumber);
+
+        // Only trigger transaction for frames 1 and 162 (only these cost MON)
+        if (frameNumber === 1 || frameNumber === 162) {
+          handleFrameViewPrivy(frameNumber);
+        } else {
+          // Frames 2-161 are free - just update UI, no transaction needed
+          setTxStatus(`✅ Frame ${frameNumber} viewed - FREE! No blockchain transaction needed.`);
+
+          // Update slap progress for free frames
+          if (frameNumber > 1 && frameNumber < 162) {
+            // We're in the middle of a slap, keep slap in progress
+            setSlapInProgress(true);
+          }
         }
       }
-    }
-  };
+    });
+  }, [currentFrame]);
 
   // Deposit MON to contract using available wallet
   const handleDeposit = async () => {
@@ -797,12 +812,52 @@ export default function Home() {
   // Debug: Log the frame source
   console.log('Current frame source:', frameSrc);
 
-  // Test image accessibility
+  // Preload images for smoother animation
   useEffect(() => {
-    const testImage = new Image();
-    testImage.onload = () => console.log('✅ Test image loaded successfully:', '/johngettingpunched/frame_00001.png');
-    testImage.onerror = () => console.error('❌ Test image failed to load:', '/johngettingpunched/frame_00001.png');
-    testImage.src = '/johngettingpunched/frame_00001.png';
+    const preloadImages = async () => {
+      console.log('🔄 Preloading images for smoother animation...');
+      const imagePromises = [];
+
+      // Preload key frames first (1, 81, 162 for immediate responsiveness)
+      const keyFrames = [1, 81, 162];
+      for (const frame of keyFrames) {
+        const img = new Image();
+        const src = `/johngettingpunched/frame_${String(frame).padStart(5, '0')}.png`;
+        imagePromises.push(new Promise((resolve, reject) => {
+          img.onload = () => {
+            console.log(`✅ Key frame ${frame} loaded`);
+            resolve();
+          };
+          img.onerror = () => {
+            console.error(`❌ Key frame ${frame} failed to load`);
+            reject();
+          };
+          img.src = src;
+        }));
+      }
+
+      // Wait for key frames to load
+      try {
+        await Promise.all(imagePromises);
+        console.log('✅ Key frames preloaded successfully');
+
+        // Then preload remaining frames in background (non-blocking)
+        setTimeout(() => {
+          for (let i = 1; i <= 162; i++) {
+            if (!keyFrames.includes(i)) {
+              const img = new Image();
+              img.src = `/johngettingpunched/frame_${String(i).padStart(5, '0')}.png`;
+            }
+          }
+          console.log('🔄 Background preloading all frames...');
+        }, 1000);
+
+      } catch (error) {
+        console.error('❌ Some key frames failed to preload:', error);
+      }
+    };
+
+    preloadImages();
   }, []);
 
   return (
