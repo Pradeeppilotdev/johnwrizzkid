@@ -105,6 +105,8 @@ export default function Home() {
   const [userBalance, setUserBalance] = useState(0); // Contract balance
   const [walletBalance, setWalletBalance] = useState(0); // Native wallet balance
   const [slapInProgress, setSlapInProgress] = useState(false);
+  const [copyButtonText, setCopyButtonText] = useState('Copy');
+  const [transactionNotifications, setTransactionNotifications] = useState([]);
   const containerRef = useRef(null);
   const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
@@ -177,6 +179,8 @@ export default function Home() {
           walletClient: provider
         });
 
+        // Add welcome notification
+        addTransactionNotification('success', '🎉 Wallet Connected!', null);
         setTxStatus('✅ Privy embedded wallet ready! Gasless transactions enabled (Monad 2048 approach)');
       } catch (error) {
         console.error('❌ Failed to setup wallet client:', error);
@@ -216,7 +220,7 @@ export default function Home() {
   };
 
   // Test contract connection
-  const testContract = async () => {
+  const testContractConnection = async () => {
     if (!smartAccountClient) return;
     setTxStatus('Testing contract connection...');
     try {
@@ -484,14 +488,17 @@ export default function Home() {
       txHash = result.result;
       console.log('🚀 Gasless transaction sent via direct RPC:', txHash);
 
-      // Update slap progress state
+      // Add transaction notification
       if (frameNumber === 1) {
+        addTransactionNotification('success', '🎯 Slap Started!', txHash);
         setSlapInProgress(true);
         setTxStatus(`🎯 Slap started (Gasless)! 0.001 MON deducted. Continue to frame 162 to complete it.`);
       } else if (frameNumber === 162) {
+        addTransactionNotification('success', '🎉 Slap Completed!', txHash);
         setSlapInProgress(false);
         setTxStatus(`🎉 Slap completed (Gasless)! 0.001 MON deducted. Check the leaderboard!`);
       } else {
+        addTransactionNotification('success', `✅ Frame ${frameNumber} Viewed`, txHash);
         setTxStatus(`✅ Frame ${frameNumber} viewed (Gasless)! FREE - no MON deducted`);
       }
 
@@ -503,6 +510,9 @@ export default function Home() {
 
     } catch (err) {
       console.error('Frame view transaction error:', err);
+
+      // Add error notification
+      addTransactionNotification('error', '❌ Transaction Failed', null);
 
       // Reset nonce on error (like Monad 2048)
       if (err.message.includes('nonce') || err.message.includes('replacement')) {
@@ -633,6 +643,9 @@ export default function Home() {
 
       txHash = result.result;
       console.log('🚀 Gasless deposit sent via direct RPC:', txHash);
+
+      // Add transaction notification
+      addTransactionNotification('success', `💰 Deposited ${depositAmount} MON`, txHash);
       setTxStatus(`✅ Deposited ${depositAmount} MON gaslessly! Hash: ${txHash}`);
 
       // Refresh user data after successful deposit
@@ -641,6 +654,9 @@ export default function Home() {
       }, 2000);
     } catch (err) {
       console.error('Deposit error:', err);
+
+      // Add error notification
+      addTransactionNotification('error', '❌ Deposit Failed', null);
 
       // Reset nonce on error (like Monad 2048)
       if (err.message.includes('nonce')) {
@@ -660,7 +676,7 @@ export default function Home() {
   };
 
   // Run a test gasless transaction (simulate animation contract call)
-  const runTestTransaction = async () => {
+  const testGaslessTransaction = async () => {
     if (!smartAccountClient) return;
     setTxStatus('Sending gasless transaction...');
     try {
@@ -710,162 +726,306 @@ export default function Home() {
     }
   };
 
+  // Copy wallet address to clipboard
+  const copyWalletAddress = async () => {
+    if (privyAddress) {
+      try {
+        await navigator.clipboard.writeText(privyAddress);
+        setCopyButtonText('Copied!');
+        setTimeout(() => setCopyButtonText('Copy'), 2000);
+      } catch (err) {
+        console.error('Failed to copy address:', err);
+        setCopyButtonText('Failed');
+        setTimeout(() => setCopyButtonText('Copy'), 2000);
+      }
+    }
+  };
+
+  // Add transaction notification
+  const addTransactionNotification = (type, title, hash) => {
+    const notification = {
+      id: Date.now(),
+      type, // 'success' or 'error'
+      title,
+      hash,
+      timestamp: Date.now()
+    };
+
+    setTransactionNotifications(prev => [notification, ...prev.slice(0, 2)]); // Keep max 3 notifications
+
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+      setTransactionNotifications(prev => prev.filter(n => n.id !== notification.id));
+    }, 10000);
+  };
+
   // Render the frame image
   const frameSrc = `/johngettingpunched/frame_${String(currentFrame).padStart(5, '0')}.png`;
 
   return (
     <div className={styles.container}>
-      <h1>John Getting Punched - Core Animation + Wallet Connect + Gasless</h1>
-      <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
-        Move your mouse over the frame to change frames (1-162)
-      </p>
-      
-      {/* Debug Information */}
-      <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#f0f0f0', borderRadius: 6, fontSize: '12px' }}>
-        <strong>Debug Info:</strong><br />
-        Privy Ready: {ready ? '✅ Yes' : '❌ No'}<br />
-        Authenticated: {authenticated ? '✅ Yes' : '❌ No'}<br />
-        Wallets Count: {wallets.length}<br />
-        Pimlico API Key: {process.env.NEXT_PUBLIC_PIMLICO_API_KEY ? '✅ Set' : '❌ Not Set'}<br />
-        Smart Account Client: {smartAccountClient ? '✅ Ready' : '❌ Not Ready'}<br />
-        {smartAccountClient?.account && (
-          <>Smart Account Address: {smartAccountClient.account.address}<br /></>
-        )}
-        Wallet Type: {smartAccountClient?.isSmartWallet ? '🚀 Smart Wallet (Gasless)' : '⚠️ Embedded Wallet (Requires Approval)'}<br />
-        Privy App ID: {process.env.NEXT_PUBLIC_PRIVY_APP_ID || '❌ Not Set'}<br />
-        Contract Address: {contractAddress}<br />
-        {authenticated && (
-          <>
-            Slap Progress: {slapInProgress ? '🎯 In Progress' : '⏳ Ready to Start'}<br />
-            <strong>💡 Tip:</strong> Move mouse to frame 1 to start slap, then to frame 162 to complete it<br />
-            <strong>🚀 Mode:</strong> Privy Embedded Wallet (Like Monad 2048)<br />
-            <strong>Wallet Type:</strong> {wallets.length > 0 ? wallets[0].walletClientType : 'None'}<br />
-            <strong>Signatures:</strong> {isUsingEmbeddedWallet ? '✅ Disabled (Auto-execute)' : '❌ Required (External wallet)'}<br />
-            {!isUsingEmbeddedWallet && (
-              <span style={{ color: 'orange' }}>
-                ⚠️ Switch to embedded wallet for seamless experience (no signatures)
-              </span>
-            )}
-          </>
-        )}
-      </div>
-      
-      <div style={{ marginBottom: 24 }}>
-        {!authenticated ? (
-          <button
-            onClick={login}
-            disabled={!ready}
-            className={styles.connectButton}
-          >
-            {!ready ? 'Loading Privy...' : 'Connect Wallet'}
-          </button>
-        ) : (
-          <div>
-            <div style={{ marginBottom: 8 }}>
-              <strong>Connected as:</strong> {privyAddress}
-              <br />
-              <strong>MON Balance:</strong>{' '}
-              {isBalanceLoading
-                ? 'Loading...'
-                : monBalance
-                  ? Number(monBalance.formatted).toLocaleString(undefined, { maximumFractionDigits: 4 })
-                  : '0'}
-            </div>
-            <button onClick={logout} className={styles.connectButton}>
-              Disconnect
+      {!authenticated ? (
+        <div className={styles.gameArea}>
+          <div style={{ textAlign: 'center', maxWidth: '600px' }}>
+            <h1 className={styles.logo} style={{ fontSize: '4rem', marginBottom: '2rem' }}>
+              JohnWRizzKid
+            </h1>
+            <p style={{ fontSize: '1.3rem', marginBottom: '3rem', color: '#ccc', lineHeight: '1.6' }}>
+              Experience the ultimate slap animation with <strong>gasless blockchain transactions</strong>!<br/>
+              Only frames 1 & 162 cost 0.001 MON each. Frames 2-161 are completely FREE!
+            </p>
+            <button onClick={login} className={styles.connectButton}>
+              Connect Wallet & Play
             </button>
           </div>
-        )}
-      </div>
-      <div style={{ marginBottom: 24 }}>
-        {authenticated && (
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <input
-              type="number"
-              min="0.001"
-              step="0.001"
-              placeholder="0.002 MON (1 slap)"
-              value={depositAmount}
-              onChange={e => setDepositAmount(e.target.value)}
-              style={{ padding: 8, borderRadius: 6, border: '1px solid #ccc', width: 200 }}
-              disabled={!wallets.length}
-            />
-            <div style={{ fontSize: '0.8em', color: '#888', marginTop: 4, marginBottom: 8 }}>
-              💡 Suggested: 0.002 MON (1 slap) or 0.02 MON (10 slaps) or 0.1 MON (50 slaps)
+        </div>
+      ) : (
+        <>
+          {/* Header */}
+          <div className={styles.header}>
+            <div className={styles.logo}>JohnWRizzKid</div>
+            <div className={styles.userInfo}>
+              <div className={styles.balance}>
+                <strong>Wallet:</strong> {(walletBalance / 1e18).toFixed(4)} MON
+              </div>
+              <div className={styles.balance}>
+                <strong>Contract:</strong> {(userBalance / 1e18).toFixed(4)} MON ({Math.floor((userBalance / 1e18) / 0.002)} slaps)
+              </div>
+              <div className={styles.balance}>
+                <strong>Slaps:</strong> {userSlapCount} | <strong>Rank:</strong> {userRank > 0 ? `#${userRank}` : 'Unranked'}
+              </div>
+              <button onClick={logout} className={styles.button} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
+                Disconnect
+              </button>
             </div>
-            <button onClick={handleDeposit} disabled={!smartAccountClient || !depositAmount} className={styles.animationButton}>
-              Deposit to Contract {smartAccountClient?.isSmartWallet ? '(Gasless)' : '(Requires Approval)'}
-            </button>
-            <button onClick={testSmartAccount} disabled={!smartAccountClient} className={styles.animationButton}>
-              Test Smart Account
-            </button>
-            <button onClick={testContract} disabled={!smartAccountClient} className={styles.animationButton}>
-              Test Contract Connection
-            </button>
-            <button onClick={runTestTransaction} disabled={!smartAccountClient || !hasDeposited} className={styles.animationButton}>
-              Run Test Gasless Transaction
-            </button>
-            <button onClick={resetSlapProgress} disabled={!smartAccountClient || !privyAddress} className={styles.animationButton}>
-              Reset Slap Progress
-            </button>
           </div>
-        )}
-        <div style={{ marginTop: 12, color: '#333', minHeight: 24 }}>{txStatus}</div>
-      </div>
 
-      {/* Leaderboard Section */}
-      {authenticated && (
-        <div style={{ marginBottom: 24, padding: 16, backgroundColor: '#f5f5f5', borderRadius: 8 }}>
-          <h3 style={{ marginBottom: 12 }}>🏆 Slap Leaderboard</h3>
-          <div style={{ marginBottom: 8 }}>
-            <strong>Wallet:</strong> {(walletBalance / 1e18).toFixed(4)} MON | <strong>Contract Balance:</strong> {(userBalance / 1e18).toFixed(4)} MON ({Math.floor((userBalance / 1e18) / 0.002)} slaps) | <strong>Slaps:</strong> {userSlapCount} | <strong>Rank:</strong> {userRank > 0 ? `#${userRank}` : 'Not ranked'}
+          {/* Clean Main Game Area */}
+          <div className={styles.gameArea}>
+            <div className={styles.gameContainer}>
+              {/* Left Side - Controls */}
+              <div className={styles.controlsPanel}>
+                <h3>🎮 Controls</h3>
+
+                {/* Wallet Display */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.5rem', color: '#666' }}>
+                    Your Wallet:
+                  </div>
+                  <div style={{
+                    background: '#f8f8f8',
+                    border: '2px solid #2c2c2c',
+                    borderRadius: '8px',
+                    padding: '0.5rem',
+                    fontSize: '0.8rem',
+                    fontFamily: 'Monaco, monospace',
+                    wordBreak: 'break-all',
+                    marginBottom: '0.5rem'
+                  }}>
+                    {privyAddress}
+                  </div>
+                  <button
+                    onClick={copyWalletAddress}
+                    style={{
+                      background: '#4ecdc4',
+                      color: 'white',
+                      border: '2px solid #2c2c2c',
+                      borderRadius: '15px',
+                      padding: '0.3rem 0.8rem',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    {copyButtonText}
+                  </button>
+                </div>
+
+                {/* Deposit */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.5rem', color: '#666' }}>
+                    Deposit MON:
+                  </div>
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    placeholder="0.002"
+                    value={depositAmount}
+                    onChange={e => setDepositAmount(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.8rem',
+                      border: '2px solid #2c2c2c',
+                      borderRadius: '8px',
+                      fontSize: '0.9rem',
+                      marginBottom: '0.5rem'
+                    }}
+                  />
+                  <button
+                    onClick={handleDeposit}
+                    disabled={!smartAccountClient || !depositAmount}
+                    style={{
+                      width: '100%',
+                      background: '#ff6b6b',
+                      color: 'white',
+                      border: '2px solid #2c2c2c',
+                      borderRadius: '15px',
+                      padding: '0.8rem',
+                      fontSize: '0.9rem',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Deposit
+                  </button>
+                </div>
+
+                {/* Frame Slider */}
+                <div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.5rem', color: '#666' }}>
+                    Frame: {currentFrame}/162
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="162"
+                    value={currentFrame}
+                    onChange={(e) => setCurrentFrame(parseInt(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              {/* Center - Clean Square Frame */}
+              <div className={styles.slapFrame}>
+                <div
+                  className={styles.frameContainer}
+                  ref={containerRef}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={() => setCurrentFrame(1)}
+                >
+                  <img
+                    src={frameSrc}
+                    alt={`Frame ${currentFrame}`}
+                    className={styles.frameImage}
+                    onError={(e) => {
+                      console.error('Image failed to load:', frameSrc);
+                      e.target.src = '/johngettingpunched/frame_00001.png'; // Fallback
+                    }}
+                  />
+                  <div className={styles.frameNumber}>
+                    {currentFrame}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Side - Leaderboard */}
+              <div className={styles.controlsPanel} style={{ transform: 'rotate(-1deg)' }}>
+                <h3>🏆 Leaderboard</h3>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#666', textAlign: 'center' }}>
+                    Your Stats: {userSlapCount} slaps | Rank: {userRank > 0 ? `#${userRank}` : 'Unranked'}
+                  </div>
+                </div>
+
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {leaderboard.length > 0 ? (
+                    leaderboard.slice(0, 10).map((entry, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.5rem',
+                          marginBottom: '0.5rem',
+                          background: entry.address === privyAddress ? '#fff3cd' : '#f8f9fa',
+                          border: '2px solid #2c2c2c',
+                          borderRadius: '8px',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        <div style={{ fontWeight: '700', color: '#ff6b6b', minWidth: '30px' }}>
+                          #{index + 1}
+                        </div>
+                        <div style={{
+                          fontFamily: 'Monaco, monospace',
+                          fontSize: '0.7rem',
+                          flex: 1,
+                          margin: '0 0.5rem'
+                        }}>
+                          {entry.address.slice(0, 6)}...{entry.address.slice(-4)}
+                        </div>
+                        <div style={{ fontWeight: '600', color: '#4ecdc4' }}>
+                          {entry.slapCount}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>
+                      <p>🎯 No slaps yet!</p>
+                      <p style={{ fontSize: '0.8rem' }}>Be the first!</p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={fetchLeaderboard}
+                  style={{
+                    width: '100%',
+                    background: '#4ecdc4',
+                    color: 'white',
+                    border: '2px solid #2c2c2c',
+                    borderRadius: '15px',
+                    padding: '0.6rem',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    marginTop: '1rem'
+                  }}
+                >
+                  🔄 Refresh
+                </button>
+              </div>
+
+            </div>
           </div>
-          <div style={{ marginBottom: 8, fontSize: '0.9em', color: '#666' }}>
-            💡 <strong>How it works:</strong> Only frames 1 & 162 cost 0.001 MON each (0.002 MON per complete slap). Frames 2-161 are FREE!
-          </div>
-          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-            {leaderboard.map((entry, index) => (
-              <div key={index} style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                padding: '4px 0',
-                backgroundColor: entry.address === privyAddress ? '#e3f2fd' : 'transparent'
-              }}>
-                <span>#{entry.rank} {entry.address.slice(0, 6)}...{entry.address.slice(-4)}</span>
-                <span>{entry.slapCount} slaps</span>
+
+          {/* Transaction Notifications - Right Side */}
+          <div className={styles.transactionNotifications}>
+            {transactionNotifications.map((notification) => (
+              <div
+                key={notification.id}
+                className={`${styles.transactionNotification} ${styles[notification.type]}`}
+              >
+                <div className={styles.transactionTitle}>
+                  {notification.title}
+                </div>
+                {notification.hash && (
+                  <>
+                    <div className={styles.transactionHash}>
+                      {notification.hash.slice(0, 10)}...{notification.hash.slice(-8)}
+                    </div>
+                    <a
+                      href={`https://testnet.monadexplorer.com/tx/${notification.hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.explorerLink}
+                    >
+                      View on Explorer
+                    </a>
+                  </>
+                )}
               </div>
             ))}
           </div>
-          <button onClick={fetchLeaderboard} className={styles.animationButton} style={{ marginTop: 8 }}>
-            Refresh Leaderboard
-          </button>
-        </div>
+        </>
       )}
-      <div className={styles.frameContainer}>
-        <div
-          ref={containerRef}
-          className={styles.frameViewer}
-          onMouseMove={handleMouseMove}
-          style={{
-            width: '640px',
-            height: '360px',
-            border: '2px solid #ccc',
-            margin: '0 auto',
-            position: 'relative',
-            background: '#222',
-            cursor: 'crosshair',
-          }}
-        >
-          <img
-            src={frameSrc}
-            alt={`Frame ${currentFrame}`}
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
-          <div className={styles.frameInfo}>
-            Frame: {currentFrame} / 162
-          </div>
-        </div>
-      </div>
+
+
+
     </div>
   );
 }
