@@ -794,6 +794,17 @@ export default function Home() {
   // Render the frame image
   const frameSrc = `/johngettingpunched/frame_${String(currentFrame).padStart(5, '0')}.png`;
 
+  // Debug: Log the frame source
+  console.log('Current frame source:', frameSrc);
+
+  // Test image accessibility
+  useEffect(() => {
+    const testImage = new Image();
+    testImage.onload = () => console.log('✅ Test image loaded successfully:', '/johngettingpunched/frame_00001.png');
+    testImage.onerror = () => console.error('❌ Test image failed to load:', '/johngettingpunched/frame_00001.png');
+    testImage.src = '/johngettingpunched/frame_00001.png';
+  }, []);
+
   return (
     <div className={styles.container}>
       {!authenticated ? (
@@ -967,7 +978,16 @@ export default function Home() {
                     className={styles.frameImage}
                     onError={(e) => {
                       console.error('Image failed to load:', frameSrc);
-                      e.target.src = '/johngettingpunched/frame_00001.png'; // Fallback
+                      console.error('Error details:', e);
+                      // Try different fallback paths
+                      if (!e.target.dataset.fallbackTried) {
+                        e.target.dataset.fallbackTried = 'true';
+                        e.target.src = '/johngettingpunched/frame_00001.png'; // Fallback
+                      } else {
+                        // If even fallback fails, show a placeholder
+                        e.target.style.display = 'none';
+                        console.error('All image fallbacks failed');
+                      }
                     }}
                   />
                   <div className={styles.frameNumber}>
