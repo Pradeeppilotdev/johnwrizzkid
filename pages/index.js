@@ -110,9 +110,26 @@ export default function Home() {
   const [sessionPunchCount, setSessionPunchCount] = useState(0); // Frontend session counter
   const [showInstructions, setShowInstructions] = useState(false); // Instructions popup
   const containerRef = useRef(null);
-  const { ready, authenticated, login, logout, user } = usePrivy();
-  const { wallets } = useWallets();
-  const privyAddress = wallets.length > 0 ? wallets[0].address : '';
+
+  // Safe Privy hooks with fallbacks
+  let ready = false, authenticated = false, login = () => {}, logout = () => {}, user = null;
+  let wallets = [];
+
+  try {
+    const privyHooks = usePrivy();
+    const walletHooks = useWallets();
+    ready = privyHooks.ready;
+    authenticated = privyHooks.authenticated;
+    login = privyHooks.login;
+    logout = privyHooks.logout;
+    user = privyHooks.user;
+    wallets = walletHooks.wallets || [];
+  } catch (error) {
+    // Privy not available during SSR or build
+    console.log('Privy not available:', error.message);
+  }
+
+  const privyAddress = wallets && wallets.length > 0 ? wallets[0].address : '';
 
   // Monad 2048 approach: Local nonce management and direct RPC
   const userNonce = useRef(0);
