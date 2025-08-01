@@ -13,4 +13,30 @@ a {
 
 * {
   box-sizing: border-box;
-} 
+}
+
+/* Custom scrollbar for instructions popup to maintain rounded corners */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 20px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #4ecdc4;
+  border-radius: 20px;
+  border: 2px solid white;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #45b7aa;
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #4ecdc4 transparent;
+}

@@ -107,6 +107,8 @@ export default function Home() {
   const [slapInProgress, setSlapInProgress] = useState(false);
   const [copyButtonText, setCopyButtonText] = useState('Copy');
   const [transactionNotifications, setTransactionNotifications] = useState([]);
+  const [sessionPunchCount, setSessionPunchCount] = useState(0); // Frontend session counter
+  const [showInstructions, setShowInstructions] = useState(false); // Instructions popup
   const containerRef = useRef(null);
   const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
@@ -125,6 +127,12 @@ export default function Home() {
   useEffect(() => {
     if (wallets.length > 0) {
       wallets[0].switchChain(monadTestnet.id); // Monad Testnet chain ID
+
+      // Check if first time user and show instructions
+      const hasSeenInstructions = localStorage.getItem('johnwrizzkid-instructions-seen');
+      if (!hasSeenInstructions) {
+        setShowInstructions(true);
+      }
     }
   }, [wallets]);
 
@@ -490,13 +498,14 @@ export default function Home() {
 
       // Add transaction notification
       if (frameNumber === 1) {
-        addTransactionNotification('success', '🎯 Slap Started!', txHash);
+        addTransactionNotification('success', '🥊 Punch Started!', txHash);
         setSlapInProgress(true);
-        setTxStatus(`🎯 Slap started (Gasless)! 0.001 MON deducted. Continue to frame 162 to complete it.`);
+        setTxStatus(`🥊 Punch started (Gasless)! 0.001 MON deducted. Continue to frame 162 to complete it.`);
       } else if (frameNumber === 162) {
-        addTransactionNotification('success', '🎉 Slap Completed!', txHash);
+        addTransactionNotification('success', '💥 Punch Completed!', txHash);
         setSlapInProgress(false);
-        setTxStatus(`🎉 Slap completed (Gasless)! 0.001 MON deducted. Check the leaderboard!`);
+        setSessionPunchCount(prev => prev + 1); // Increment session counter
+        setTxStatus(`💥 Punch completed (Gasless)! 0.001 MON deducted. Check the leaderboard!`);
       } else {
         addTransactionNotification('success', `✅ Frame ${frameNumber} Viewed`, txHash);
         setTxStatus(`✅ Frame ${frameNumber} viewed (Gasless)! FREE - no MON deducted`);
@@ -759,6 +768,12 @@ export default function Home() {
     }, 10000);
   };
 
+  // Close instructions and mark as seen
+  const closeInstructions = () => {
+    setShowInstructions(false);
+    localStorage.setItem('johnwrizzkid-instructions-seen', 'true');
+  };
+
   // Render the frame image
   const frameSrc = `/johngettingpunched/frame_${String(currentFrame).padStart(5, '0')}.png`;
 
@@ -770,8 +785,8 @@ export default function Home() {
             <h1 className={styles.logo} style={{ fontSize: '4rem', marginBottom: '2rem' }}>
               JohnWRizzKid
             </h1>
-            <p style={{ fontSize: '1.3rem', marginBottom: '3rem', color: '#ccc', lineHeight: '1.6' }}>
-              Experience the ultimate slap animation with <strong>gasless blockchain transactions</strong>!<br/>
+            <p style={{ fontSize: '1.3rem', marginBottom: '3rem', color: '#333', lineHeight: '1.6' }}>
+              Experience the ultimate punch animation with <strong>gasless blockchain transactions</strong>!<br/>
               Only frames 1 & 162 cost 0.001 MON each. Frames 2-161 are completely FREE!
             </p>
             <button onClick={login} className={styles.connectButton}>
@@ -789,12 +804,17 @@ export default function Home() {
                 <strong>Wallet:</strong> {(walletBalance / 1e18).toFixed(4)} MON
               </div>
               <div className={styles.balance}>
-                <strong>Contract:</strong> {(userBalance / 1e18).toFixed(4)} MON ({Math.floor((userBalance / 1e18) / 0.002)} slaps)
+                <strong>Contract:</strong> {(userBalance / 1e18).toFixed(4)} MON
               </div>
-              <div className={styles.balance}>
-                <strong>Slaps:</strong> {userSlapCount} | <strong>Rank:</strong> {userRank > 0 ? `#${userRank}` : 'Unranked'}
-              </div>
-              <button onClick={logout} className={styles.button} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
+              <button onClick={logout} className={styles.button} style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.9rem',
+                background: '#4ecdc4',
+                color: 'white',
+                fontWeight: '600',
+                border: '2px solid #2c2c2c',
+                borderRadius: '15px'
+              }}>
                 Disconnect
               </button>
             </div>
@@ -899,6 +919,25 @@ export default function Home() {
 
               {/* Center - Clean Square Frame */}
               <div className={styles.slapFrame}>
+                {/* Session Punch Counter */}
+                <div style={{
+                  textAlign: 'center',
+                  marginBottom: '1rem',
+                  padding: '0.8rem',
+                  background: '#f8f8f8',
+                  border: '2px solid #2c2c2c',
+                  borderRadius: '15px',
+                  maxWidth: '300px',
+                  margin: '0 auto 1rem auto'
+                }}>
+                  <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.3rem' }}>
+                    Session Punches Completed
+                  </div>
+                  <div style={{ fontSize: '2rem', fontWeight: '700', color: '#ff6b6b' }}>
+                    {sessionPunchCount}
+                  </div>
+                </div>
+
                 <div
                   className={styles.frameContainer}
                   ref={containerRef}
@@ -920,78 +959,197 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Right Side - Leaderboard */}
-              <div className={styles.controlsPanel} style={{ transform: 'rotate(-1deg)' }}>
+              {/* Right Side - Leaderboard Coming Soon */}
+              <div className={styles.controlsPanel} style={{ transform: 'rotate(-1deg)', position: 'relative' }}>
                 <h3>🏆 Leaderboard</h3>
 
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.8rem', color: '#666', textAlign: 'center' }}>
-                    Your Stats: {userSlapCount} slaps | Rank: {userRank > 0 ? `#${userRank}` : 'Unranked'}
+                {/* Blurred placeholder content */}
+                <div style={{
+                  filter: 'blur(3px)',
+                  opacity: 0.3,
+                  pointerEvents: 'none',
+                  maxHeight: '300px',
+                  overflowY: 'auto'
+                }}>
+                  {/* Mock leaderboard entries */}
+                  {[1, 2, 3, 4, 5].map((index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.5rem',
+                        marginBottom: '0.5rem',
+                        background: '#f8f9fa',
+                        border: '2px solid #2c2c2c',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      <div style={{ fontWeight: '700', color: '#ff6b6b', minWidth: '30px' }}>
+                        #{index}
+                      </div>
+                      <div style={{
+                        fontFamily: 'Monaco, monospace',
+                        fontSize: '0.7rem',
+                        flex: 1,
+                        margin: '0 0.5rem'
+                      }}>
+                        0x1234...abcd
+                      </div>
+                      <div style={{ fontWeight: '600', color: '#4ecdc4' }}>
+                        {Math.floor(Math.random() * 50) + 10}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Coming Soon Overlay */}
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  border: '3px solid #ff6b6b',
+                  borderRadius: '15px',
+                  padding: '1.5rem',
+                  textAlign: 'center',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  zIndex: 10
+                }}>
+                  <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ff6b6b', marginBottom: '0.5rem' }}>
+                    🚀 Coming Soon!
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                    Leaderboard feature<br/>in development
                   </div>
                 </div>
-
-                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                  {leaderboard.length > 0 ? (
-                    leaderboard.slice(0, 10).map((entry, index) => (
-                      <div
-                        key={index}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '0.5rem',
-                          marginBottom: '0.5rem',
-                          background: entry.address === privyAddress ? '#fff3cd' : '#f8f9fa',
-                          border: '2px solid #2c2c2c',
-                          borderRadius: '8px',
-                          fontSize: '0.8rem'
-                        }}
-                      >
-                        <div style={{ fontWeight: '700', color: '#ff6b6b', minWidth: '30px' }}>
-                          #{index + 1}
-                        </div>
-                        <div style={{
-                          fontFamily: 'Monaco, monospace',
-                          fontSize: '0.7rem',
-                          flex: 1,
-                          margin: '0 0.5rem'
-                        }}>
-                          {entry.address.slice(0, 6)}...{entry.address.slice(-4)}
-                        </div>
-                        <div style={{ fontWeight: '600', color: '#4ecdc4' }}>
-                          {entry.slapCount}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>
-                      <p>🎯 No slaps yet!</p>
-                      <p style={{ fontSize: '0.8rem' }}>Be the first!</p>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={fetchLeaderboard}
-                  style={{
-                    width: '100%',
-                    background: '#4ecdc4',
-                    color: 'white',
-                    border: '2px solid #2c2c2c',
-                    borderRadius: '15px',
-                    padding: '0.6rem',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    fontWeight: '600',
-                    marginTop: '1rem'
-                  }}
-                >
-                  🔄 Refresh
-                </button>
               </div>
 
             </div>
           </div>
+
+          {/* Instructions Popup for First-Time Users */}
+          {showInstructions && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '2rem'
+            }}>
+              <div style={{
+                background: 'white',
+                border: '3px solid #2c2c2c',
+                borderRadius: '20px',
+                padding: '2rem',
+                maxWidth: '600px',
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                // Custom scrollbar styling to maintain rounded corners
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#4ecdc4 transparent'
+              }}
+              // Add webkit scrollbar styles for better browser support
+              className="custom-scrollbar"
+              >
+                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                  <h2 style={{ color: '#ff6b6b', fontSize: '2rem', marginBottom: '0.5rem' }}>
+                    🎮 How to Play JohnWRizzKid!
+                  </h2>
+                  <p style={{ color: '#666', fontSize: '1rem' }}>
+                    Welcome! Here's everything you need to know:
+                  </p>
+                </div>
+
+                <div style={{ textAlign: 'left', lineHeight: '1.6' }}>
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h3 style={{ color: '#4ecdc4', fontSize: '1.2rem', marginBottom: '0.5rem' }}>
+                      💰 Step 1: Fund Your Wallet
+                    </h3>
+                    <p style={{ color: '#333', marginBottom: '0.5rem' }}>
+                      • Copy your wallet address using the "Copy" button
+                    </p>
+                    <p style={{ color: '#333', marginBottom: '0.5rem' }}>
+                      • Get MON tokens and send them to your wallet address
+                    </p>
+                    <p style={{ color: '#333' }}>
+                      • Enter desired amount and click "Deposit" to fund the contract
+                    </p>
+                  </div>
+
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h3 style={{ color: '#4ecdc4', fontSize: '1.2rem', marginBottom: '0.5rem' }}>
+                      🎯 Step 2: Play the Game
+                    </h3>
+                    <p style={{ color: '#333', marginBottom: '0.5rem' }}>
+                      • Move your cursor over John's image to control the animation
+                    </p>
+                    <p style={{ color: '#333', marginBottom: '0.5rem' }}>
+                      • Left side = Frame 1, Right side = Frame 162
+                    </p>
+                    <p style={{ color: '#333' }}>
+                      • Complete a punch: Frame 1 → Frame 162 (costs 0.002 MON total)
+                    </p>
+                  </div>
+
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h3 style={{ color: '#4ecdc4', fontSize: '1.2rem', marginBottom: '0.5rem' }}>
+                      ⚡ Step 3: Gasless Magic
+                    </h3>
+                    <p style={{ color: '#333', marginBottom: '0.5rem' }}>
+                      • Only Frames 1 & 162 cost MON (0.001 each)
+                    </p>
+                    <p style={{ color: '#333', marginBottom: '0.5rem' }}>
+                      • Frames 2-161 are completely FREE!
+                    </p>
+                    <p style={{ color: '#333' }}>
+                      • No wallet signatures needed - fully gasless experience!
+                    </p>
+                  </div>
+
+                  <div style={{
+                    background: '#f8f8f8',
+                    border: '2px solid #4ecdc4',
+                    borderRadius: '10px',
+                    padding: '1rem',
+                    marginBottom: '1.5rem'
+                  }}>
+                    <p style={{ color: '#333', margin: 0, fontSize: '0.9rem', textAlign: 'center' }}>
+                      💡 <strong>Pro Tip:</strong> Watch your session punch counter above the frame!
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'center' }}>
+                  <button
+                    onClick={closeInstructions}
+                    style={{
+                      background: '#ff6b6b',
+                      color: 'white',
+                      border: '2px solid #2c2c2c',
+                      borderRadius: '15px',
+                      padding: '1rem 2rem',
+                      fontSize: '1.1rem',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    🚀 Got It! Let's Play!
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Transaction Notifications - Right Side */}
           <div className={styles.transactionNotifications}>
