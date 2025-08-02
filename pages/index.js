@@ -468,13 +468,26 @@ export default function Home() {
       console.log('⛽ Current gas price:', (Number(gasPrice) / 1e9).toFixed(2), 'gwei');
       console.log('⛽ Using maxFeePerGas:', (Number(maxFeePerGas) / 1e9).toFixed(2), 'gwei');
 
+      // Dynamic gas limit based on frame complexity
+      let gasLimit;
+      if (frameNumber === 162) {
+        gasLimit = '0x7A120'; // 500,000 gas for Frame 162 (leaderboard updates, slap completion)
+        console.log('🎯 Using high gas limit for Frame 162 completion');
+      } else if (frameNumber === 1) {
+        gasLimit = '0x30D40'; // 200,000 gas for Frame 1 (slap start)
+        console.log('🥊 Using medium gas limit for Frame 1 start');
+      } else {
+        gasLimit = '0x186A0'; // 100,000 gas for other frames (shouldn't be used)
+        console.log('⚡ Using standard gas limit for Frame', frameNumber);
+      }
+
       // Prepare transaction parameters with reasonable gas prices
       const txParams = {
         to: contractAddress,
         data: viewFrameData,
         value: '0x0',
         nonce: '0x' + nonce.toString(16),
-        gas: '0x186A0', // 100,000 gas limit
+        gas: gasLimit,
         maxFeePerGas: '0x' + maxFeePerGas.toString(16),
         maxPriorityFeePerGas: '0x' + maxPriorityFeePerGas.toString(16),
         chainId: '0x' + monadTestnet.id.toString(16),
@@ -1051,72 +1064,100 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Right Side - Leaderboard Coming Soon */}
-              <div className={styles.controlsPanel} style={{ transform: 'rotate(-1deg)', position: 'relative' }}>
+              {/* Right Side - Live Leaderboard */}
+              <div className={styles.controlsPanel} style={{ transform: 'rotate(-1deg)' }}>
                 <h3>🏆 Leaderboard</h3>
 
-                {/* Blurred placeholder content */}
+                {/* Small doodle instruction text */}
                 <div style={{
-                  filter: 'blur(3px)',
-                  opacity: 0.3,
-                  pointerEvents: 'none',
+                  fontSize: '0.6rem',
+                  color: '#2c2c2c',
+                  background: '#ffffff',
+                  padding: '0.3rem 0.5rem',
+                  borderRadius: '4px',
+                  marginBottom: '0.8rem',
+                  border: '1.5px dashed #2c2c2c',
+                  fontFamily: 'Comic Sans MS, cursive, sans-serif',
+                  transform: 'rotate(-0.5deg)',
+                  boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.2)'
+                }}>
+                  ✏️ To count: Frame 1 → Frame 162
+                </div>
+
+                {/* User Stats */}
+                <div style={{
+                  background: '#e8f5e8',
+                  border: '2px solid #4ecdc4',
+                  borderRadius: '8px',
+                  padding: '0.8rem',
+                  marginBottom: '1rem',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.3rem' }}>
+                    Your Stats
+                  </div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#4ecdc4' }}>
+                    {userSlapCount} Punches
+                  </div>
+                  {userRank > 0 && (
+                    <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                      Rank #{userRank}
+                    </div>
+                  )}
+                </div>
+
+                {/* Real Leaderboard */}
+                <div style={{
                   maxHeight: '300px',
                   overflowY: 'auto'
                 }}>
-                  {/* Mock leaderboard entries */}
-                  {[1, 2, 3, 4, 5].map((index) => (
-                    <div
-                      key={index}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '0.5rem',
-                        marginBottom: '0.5rem',
-                        background: '#f8f9fa',
-                        border: '2px solid #2c2c2c',
-                        borderRadius: '8px',
-                        fontSize: '0.8rem'
-                      }}
-                    >
-                      <div style={{ fontWeight: '700', color: '#ff6b6b', minWidth: '30px' }}>
-                        #{index}
+                  {leaderboard.length > 0 ? (
+                    leaderboard.map((entry, index) => (
+                      <div
+                        key={entry.address}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.5rem',
+                          marginBottom: '0.5rem',
+                          background: entry.address.toLowerCase() === privyAddress.toLowerCase() ? '#e8f5e8' : '#f8f9fa',
+                          border: entry.address.toLowerCase() === privyAddress.toLowerCase() ? '2px solid #4ecdc4' : '2px solid #2c2c2c',
+                          borderRadius: '8px',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        <div style={{ fontWeight: '700', color: '#ff6b6b', minWidth: '30px' }}>
+                          #{index + 1}
+                        </div>
+                        <div style={{
+                          fontFamily: 'Monaco, monospace',
+                          fontSize: '0.7rem',
+                          flex: 1,
+                          margin: '0 0.5rem'
+                        }}>
+                          {entry.address.slice(0, 6)}...{entry.address.slice(-4)}
+                          {entry.address.toLowerCase() === privyAddress.toLowerCase() && (
+                            <span style={{ color: '#4ecdc4', fontWeight: '600', marginLeft: '0.3rem' }}>
+                              (You)
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontWeight: '600', color: '#4ecdc4' }}>
+                          {entry.slapCount}
+                        </div>
                       </div>
-                      <div style={{
-                        fontFamily: 'Monaco, monospace',
-                        fontSize: '0.7rem',
-                        flex: 1,
-                        margin: '0 0.5rem'
-                      }}>
-                        0x1234...abcd
-                      </div>
-                      <div style={{ fontWeight: '600', color: '#4ecdc4' }}>
-                        {Math.floor(Math.random() * 50) + 10}
-                      </div>
+                    ))
+                  ) : (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '2rem',
+                      color: '#666',
+                      fontStyle: 'italic'
+                    }}>
+                      Loading leaderboard...
                     </div>
-                  ))}
-                </div>
-
-                {/* Coming Soon Overlay */}
-                <div style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  background: 'rgba(255, 255, 255, 0.95)',
-                  border: '3px solid #ff6b6b',
-                  borderRadius: '15px',
-                  padding: '1.5rem',
-                  textAlign: 'center',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  zIndex: 10
-                }}>
-                  <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ff6b6b', marginBottom: '0.5rem' }}>
-                    🚀 Coming Soon!
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                    Leaderboard feature<br/>in development
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -1206,6 +1247,24 @@ export default function Home() {
                     </p>
                     <p style={{ color: '#333' }}>
                       • Efficient blockchain transactions for the best experience!
+                    </p>
+                  </div>
+
+                  <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#fff3cd', border: '2px solid #ffc107', borderRadius: '8px' }}>
+                    <h3 style={{ color: '#856404', fontSize: '1.1rem', marginBottom: '0.5rem' }}>
+                      🎯 Important: How Punches Count On-Chain
+                    </h3>
+                    <p style={{ color: '#856404', marginBottom: '0.5rem', fontWeight: '600' }}>
+                      To record a punch on the blockchain:
+                    </p>
+                    <p style={{ color: '#856404', marginBottom: '0.3rem' }}>
+                      1. <strong>Start at Frame 1</strong> - This begins your punch
+                    </p>
+                    <p style={{ color: '#856404', marginBottom: '0.3rem' }}>
+                      2. <strong>Move through frames</strong> - Navigate to Frame 162
+                    </p>
+                    <p style={{ color: '#856404' }}>
+                      3. <strong>Complete at Frame 162</strong> - This records your punch!
                     </p>
                   </div>
 
