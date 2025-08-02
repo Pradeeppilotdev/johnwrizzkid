@@ -257,6 +257,142 @@
   transition: none; /* Remove transitions for real-time updates */
 }
 
+/* Comic Book Speech Bubbles */
+.comicBubble {
+  position: absolute;
+  background: #ffffff;
+  border: 3px solid #2c2c2c;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-family: 'Comic Sans MS', cursive, sans-serif;
+  font-weight: 900;
+  font-size: 1.2rem;
+  color: #2c2c2c;
+  text-shadow: 1px 1px 0px #ffffff;
+  box-shadow: 3px 3px 0px rgba(44, 44, 44, 0.3);
+  z-index: 100;
+  animation: comicPop 2s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Left side bubble */
+.comicBubbleLeft {
+  top: 20%;
+  left: -80px;
+  transform: rotate(-5deg);
+}
+
+.comicBubbleLeft::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  border-left: 12px solid #ffffff;
+}
+
+.comicBubbleLeft::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -15px;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+  border-left: 15px solid #2c2c2c;
+}
+
+/* Right side bubble */
+.comicBubbleRight {
+  top: 30%;
+  right: -80px;
+  transform: rotate(3deg);
+}
+
+.comicBubbleRight::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -12px;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  border-right: 12px solid #ffffff;
+}
+
+.comicBubbleRight::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -15px;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+  border-right: 15px solid #2c2c2c;
+}
+
+/* Inside frame bubble */
+.comicBubbleInside {
+  top: 15%;
+  left: 15%;
+  transform: rotate(-2deg);
+  font-size: 1.4rem;
+  padding: 8px 16px;
+}
+
+/* Punch Start Bubble */
+.punchStartBubble {
+  background: #ffeb3b;
+  color: #d32f2f;
+  transform: translateX(-50%) rotate(-3deg);
+}
+
+/* Punch Complete Bubble */
+.punchCompleteBubble {
+  background: #4caf50;
+  color: #ffffff;
+  text-shadow: 2px 2px 0px #2e7d32;
+  transform: translateX(-50%) rotate(2deg);
+}
+
+@keyframes comicPop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.3) rotate(0deg);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.2) rotate(-5deg);
+  }
+  40% {
+    transform: translateX(-50%) scale(0.9) rotate(3deg);
+  }
+  60% {
+    transform: translateX(-50%) scale(1.1) rotate(-2deg);
+  }
+  80% {
+    transform: translateX(-50%) scale(1) rotate(1deg);
+  }
+  90% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8) rotate(0deg);
+  }
+}
+
 .frameNumber {
   position: absolute;
   top: -15px;

@@ -109,6 +109,7 @@ export default function Home() {
   const [transactionNotifications, setTransactionNotifications] = useState([]);
   const [sessionPunchCount, setSessionPunchCount] = useState(0); // Frontend session counter
   const [showInstructions, setShowInstructions] = useState(false); // Instructions popup
+  const [comicBubble, setComicBubble] = useState(null); // For comic speech bubbles
   const containerRef = useRef(null);
 
   // Safe Privy hooks with fallbacks
@@ -531,11 +532,29 @@ export default function Home() {
         addTransactionNotification('success', '🥊 Punch Started!', txHash);
         setSlapInProgress(true);
         setTxStatus(`🥊 Punch started! 0.001 MON deducted. Continue to frame 162 to complete it.`);
+
+        // Show comic bubble for punch start
+        const startTexts = ['POW!!', 'WHAM!', 'KAPOW!', 'SMACK!'];
+        const positions = ['left', 'right', 'inside'];
+        const randomText = startTexts[Math.floor(Math.random() * startTexts.length)];
+        const randomPosition = positions[Math.floor(Math.random() * positions.length)];
+        setComicBubble({ text: randomText, type: 'start', position: randomPosition });
+        setTimeout(() => setComicBubble(null), 2000);
+
       } else if (frameNumber === 162) {
         addTransactionNotification('success', '💥 Punch Completed!', txHash);
         setSlapInProgress(false);
         setSessionPunchCount(prev => prev + 1); // Increment session counter
         setTxStatus(`💥 Punch completed! 0.001 MON deducted. Check the leaderboard!`);
+
+        // Show comic bubble for punch complete
+        const completeTexts = ['BAM!!', 'BOOM!', 'WHOOSH!', 'CRASH!', 'ZAP!!'];
+        const positions = ['left', 'right', 'inside'];
+        const randomText = completeTexts[Math.floor(Math.random() * completeTexts.length)];
+        const randomPosition = positions[Math.floor(Math.random() * positions.length)];
+        setComicBubble({ text: randomText, type: 'complete', position: randomPosition });
+        setTimeout(() => setComicBubble(null), 2000);
+
       } else {
         addTransactionNotification('success', `✅ Frame ${frameNumber} Viewed`, txHash);
         setTxStatus(`✅ Frame ${frameNumber} viewed! FREE - no MON deducted`);
@@ -1039,6 +1058,7 @@ export default function Home() {
                   ref={containerRef}
                   onMouseMove={handleMouseMove}
                   onMouseLeave={() => setCurrentFrame(1)}
+                  style={{ position: 'relative' }}
                 >
                   <img
                     src={frameSrc}
@@ -1058,6 +1078,14 @@ export default function Home() {
                       }
                     }}
                   />
+
+                  {/* Comic Speech Bubble */}
+                  {comicBubble && (
+                    <div className={`${styles.comicBubble} ${styles[`comicBubble${comicBubble.position.charAt(0).toUpperCase() + comicBubble.position.slice(1)}`]} ${comicBubble.type === 'start' ? styles.punchStartBubble : styles.punchCompleteBubble}`}>
+                      {comicBubble.text}
+                    </div>
+                  )}
+
                   <div className={styles.frameNumber}>
                     {currentFrame}
                   </div>
@@ -1163,6 +1191,278 @@ export default function Home() {
 
             </div>
           </div>
+
+          {/* Doodle-Style Instructions Section Below Game */}
+          <div style={{
+            maxWidth: '1200px',
+            margin: '3rem auto 2rem auto',
+            padding: '0 2rem'
+          }}>
+            <div style={{
+              background: '#ffffff',
+              border: '4px dashed #2c2c2c',
+              borderRadius: '25px',
+              padding: '2.5rem',
+              boxShadow: '12px 12px 0px rgba(44, 44, 44, 0.2), 6px 6px 0px rgba(255, 107, 107, 0.1)',
+              transform: 'rotate(-1deg)',
+              position: 'relative',
+              fontFamily: 'Comic Sans MS, cursive, sans-serif'
+            }}>
+              {/* Doodle decorations */}
+              <div style={{
+                position: 'absolute',
+                top: '-10px',
+                left: '20px',
+                width: '30px',
+                height: '30px',
+                border: '3px solid #ff6b6b',
+                borderRadius: '50%',
+                transform: 'rotate(15deg)'
+              }}></div>
+              <div style={{
+                position: 'absolute',
+                top: '10px',
+                right: '30px',
+                width: '20px',
+                height: '20px',
+                border: '2px solid #4ecdc4',
+                transform: 'rotate(-20deg)'
+              }}></div>
+              <div style={{
+                position: 'absolute',
+                bottom: '15px',
+                left: '50px',
+                fontSize: '2rem',
+                color: '#ff6b6b',
+                opacity: 0.3,
+                transform: 'rotate(-15deg)'
+              }}>★</div>
+
+              <h2 style={{
+                color: '#070707c7',
+                fontSize: '2.2rem',
+                marginBottom: '2rem',
+                textAlign: 'center',
+                fontFamily: 'Comic Sans MS, cursive, sans-serif',
+                textShadow: '3px 3px 0px rgba(11, 11, 11, 0.24)',
+                transform: 'rotate(1deg)'
+              }}>
+                How to Play JohnWRizzKid!
+              </h2>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
+                <div style={{
+                  background: '#f8f9fa',
+                  border: '3px solid #2c2c2c',
+                  borderRadius: '15px',
+                  padding: '1.5rem',
+                  transform: 'rotate(0.5deg)',
+                  boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.1)'
+                }}>
+                  <h3 style={{
+                    color: '#4ecdc4',
+                    fontSize: '1.3rem',
+                    marginBottom: '1rem',
+                    fontFamily: 'Comic Sans MS, cursive, sans-serif',
+                    textDecoration: 'underline',
+                    textDecorationStyle: 'wavy'
+                  }}>
+                     Step 1: Fund Your Wallet
+                  </h3>
+                  <div style={{ fontSize: '0.95rem', lineHeight: '1.6' }}>
+                    <p style={{ color: '#333', marginBottom: '0.7rem', position: 'relative' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Copy your wallet address using the "Copy" button
+                    </p>
+                    <p style={{ color: '#333', marginBottom: '0.7rem' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Get MON tokens and send them to your wallet address
+                    </p>
+                    <p style={{ color: '#333' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Enter desired amount and click "Deposit" to fund the contract
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{
+                  background: '#f8f9fa',
+                  border: '3px solid #2c2c2c',
+                  borderRadius: '15px',
+                  padding: '1.5rem',
+                  transform: 'rotate(-0.8deg)',
+                  boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.1)'
+                }}>
+                  <h3 style={{
+                    color: '#4ecdc4',
+                    fontSize: '1.3rem',
+                    marginBottom: '1rem',
+                    fontFamily: 'Comic Sans MS, cursive, sans-serif',
+                    textDecoration: 'underline',
+                    textDecorationStyle: 'wavy'
+                  }}>
+                     Step 2: Navigate Frames
+                  </h3>
+                  <div style={{ fontSize: '0.95rem', lineHeight: '1.6' }}>
+                    <p style={{ color: '#333', marginBottom: '0.7rem' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Move your cursor across the frame to control animation
+                    </p>
+                    <p style={{ color: '#333', marginBottom: '0.7rem' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Left side = Frame 1, Right side = Frame 162
+                    </p>
+                    <p style={{ color: '#333' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Use the slider below for precise frame control
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{
+                  background: '#f8f9fa',
+                  border: '3px solid #2c2c2c',
+                  borderRadius: '15px',
+                  padding: '1.5rem',
+                  transform: 'rotate(0.3deg)',
+                  boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.1)'
+                }}>
+                  <h3 style={{
+                    color: '#4ecdc4',
+                    fontSize: '1.3rem',
+                    marginBottom: '1rem',
+                    fontFamily: 'Comic Sans MS, cursive, sans-serif',
+                    textDecoration: 'underline',
+                    textDecorationStyle: 'wavy'
+                  }}>
+                     Step 3: Smart Transactions
+                  </h3>
+                  <div style={{ fontSize: '0.95rem', lineHeight: '1.6' }}>
+                    <p style={{ color: '#333', marginBottom: '0.7rem' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Only Frames 1 & 162 cost MON (0.001 each)
+                    </p>
+                    <p style={{ color: '#333', marginBottom: '0.7rem' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Frames 2-161 are completely FREE!
+                    </p>
+                    <p style={{ color: '#333' }}>
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Efficient blockchain transactions for the best experience!
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{
+                  gridColumn: '1 / -1',
+                  padding: '1.5rem',
+                  background: '#fff3cd',
+                  border: '3px dashed #ffc107',
+                  borderRadius: '20px',
+                  marginTop: '1rem',
+                  transform: 'rotate(-0.3deg)',
+                  boxShadow: '6px 6px 0px rgba(255, 193, 7, 0.2)',
+                  position: 'relative'
+                }}>
+                  {/* Warning doodle decoration */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    right: '20px',
+                    fontSize: '1.5rem',
+                    transform: 'rotate(20deg)'
+                  }}>⚠️</div>
+
+                  <h3 style={{
+                    color: '#856404',
+                    fontSize: '1.4rem',
+                    marginBottom: '1rem',
+                    fontFamily: 'Comic Sans MS, cursive, sans-serif',
+                    textAlign: 'center'
+                  }}>
+                    🎯 Important: How Punches Count On-Chain! 🎯
+                  </h3>
+                  <p style={{
+                    color: '#856404',
+                    marginBottom: '1rem',
+                    fontWeight: '700',
+                    fontSize: '1rem',
+                    textAlign: 'center'
+                  }}>
+                    To record a punch on the blockchain:
+                  </p>
+                  <div style={{
+                    display: 'flex',
+                    gap: '2rem',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}>
+                    <div style={{
+                      background: '#ffffff',
+                      border: '2px solid #856404',
+                      borderRadius: '10px',
+                      padding: '0.8rem',
+                      transform: 'rotate(1deg)'
+                    }}>
+                      <p style={{ color: '#856404', margin: 0, fontSize: '0.9rem', fontWeight: '600' }}>
+                        1. <strong>Start at Frame 1</strong><br/>This begins your punch
+                      </p>
+                    </div>
+                    <div style={{
+                      background: '#ffffff',
+                      border: '2px solid #856404',
+                      borderRadius: '10px',
+                      padding: '0.8rem',
+                      transform: 'rotate(-1deg)'
+                    }}>
+                      <p style={{ color: '#856404', margin: 0, fontSize: '0.9rem', fontWeight: '600' }}>
+                        2. <strong>Move through frames</strong><br/>Navigate to Frame 162
+                      </p>
+                    </div>
+                    <div style={{
+                      background: '#ffffff',
+                      border: '2px solid #856404',
+                      borderRadius: '10px',
+                      padding: '0.8rem',
+                      transform: 'rotate(0.5deg)'
+                    }}>
+                      <p style={{ color: '#856404', margin: 0, fontSize: '0.9rem', fontWeight: '600' }}>
+                        3. <strong>Complete at Frame 162</strong><br/>This records your punch!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Low Balance Warning */}
+          {authenticated && (userBalance < 0.1 || walletBalance < 0.1) && (
+            <div style={{
+              position: 'fixed',
+              bottom: '20px',
+              right: '20px',
+              background: '#ff6b6b',
+              color: 'white',
+              padding: '1rem 1.5rem',
+              borderRadius: '15px',
+              border: '3px solid #2c2c2c',
+              boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.3)',
+              zIndex: 1000,
+              maxWidth: '300px',
+              fontFamily: 'Comic Sans MS, cursive, sans-serif'
+            }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '0.5rem' }}>
+                ⚠️ Low Balance Warning!
+              </div>
+              <div style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                {userBalance < 0.1 && walletBalance < 0.1 ? (
+                  <>Both your wallet and contract balance are low!</>
+                ) : userBalance < 0.1 ? (
+                  <>Your contract balance is low! Please deposit more MON.</>
+                ) : (
+                  <>Your wallet balance is low! Please add more MON to your wallet.</>
+                )}
+              </div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                {userBalance < 0.1 && `Contract: ${userBalance.toFixed(4)} MON`}
+                {userBalance < 0.1 && walletBalance < 0.1 && ' | '}
+                {walletBalance < 0.1 && `Wallet: ${(walletBalance / 1e18).toFixed(4)} MON`}
+              </div>
+            </div>
+          )}
 
           {/* Instructions Popup for First-Time Users */}
           {showInstructions && (
