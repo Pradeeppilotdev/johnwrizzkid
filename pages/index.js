@@ -1573,35 +1573,54 @@ export default function Home() {
 
           {/* Instructions Popup for First-Time Users */}
           {showInstructions && (
-            <div style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.7)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-              padding: '2rem'
-            }}>
+            <>
+              <style jsx>{`
+                .instructions-popup::-webkit-scrollbar {
+                  width: 10px;
+                }
+                .instructions-popup::-webkit-scrollbar-track {
+                  background: rgba(44, 44, 44, 0.1);
+                  border-radius: 15px;
+                  border: 1px solid rgba(44, 44, 44, 0.2);
+                }
+                .instructions-popup::-webkit-scrollbar-thumb {
+                  background: linear-gradient(45deg, #4ecdc4, #ff6b6b);
+                  border-radius: 15px;
+                  border: 2px solid #2c2c2c;
+                  box-shadow: 2px 2px 4px rgba(44, 44, 44, 0.3);
+                }
+                .instructions-popup::-webkit-scrollbar-thumb:hover {
+                  background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+                  box-shadow: 2px 2px 6px rgba(44, 44, 44, 0.4);
+                }
+              `}</style>
               <div style={{
-                background: 'white',
-                border: '3px solid #2c2c2c',
-                borderRadius: '20px',
-                padding: '2rem',
-                maxWidth: '600px',
-                maxHeight: '80vh',
-                overflowY: 'auto',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-                // Custom scrollbar styling to maintain rounded corners
-                scrollbarWidth: 'thin',
-                scrollbarColor: '#4ecdc4 transparent'
-              }}
-              // Add webkit scrollbar styles for better browser support
-              className="custom-scrollbar"
-              >
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0, 0, 0, 0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: '2rem'
+              }}>
+                <div style={{
+                  background: 'white',
+                  border: '3px solid #2c2c2c',
+                  borderRadius: '20px',
+                  padding: '2rem',
+                  maxWidth: '600px',
+                  maxHeight: '80vh',
+                  overflowY: 'auto',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#4ecdc4 rgba(44, 44, 44, 0.2)'
+                }}
+                className="instructions-popup"
+                >
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                   <h2 style={{ color: '#ff6b6b', fontSize: '2rem', marginBottom: '0.5rem' }}>
                     🎮 How to Play JohnWRizzKid!
@@ -1623,7 +1642,7 @@ export default function Home() {
                       • Get MON tokens and send them to your wallet address
                     </p>
                     <p style={{ color: '#333' }}>
-                      • Enter desired amount and click "Deposit" to fund the contract
+                      • 0.2 MON automatically deposits to contract when you add funds!
                     </p>
                   </div>
 
@@ -1644,7 +1663,7 @@ export default function Home() {
 
                   <div style={{ marginBottom: '1.5rem' }}>
                     <h3 style={{ color: '#4ecdc4', fontSize: '1.2rem', marginBottom: '0.5rem' }}>
-                      ⚡ Step 3: Smart Transactions
+                      ⚡ Step 3: Automatic Deductions
                     </h3>
                     <p style={{ color: '#333', marginBottom: '0.5rem' }}>
                       • Only Frames 1 & 162 cost MON (0.001 each)
@@ -1653,7 +1672,7 @@ export default function Home() {
                       • Frames 2-161 are completely FREE!
                     </p>
                     <p style={{ color: '#333' }}>
-                      • Efficient blockchain transactions for the best experience!
+                      • MON automatically deducted from your contract balance!
                     </p>
                   </div>
 
@@ -1707,6 +1726,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            </>
           )}
 
           {/* Transaction Notifications - Right Side */}

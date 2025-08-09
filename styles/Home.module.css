@@ -755,7 +755,33 @@
   gap: 0.8rem;
   max-height: 300px;
   overflow-y: auto;
+  padding-right: 8px;
 }
+
+/* Custom scrollbar for leaderboard */
+.leaderboard::-webkit-scrollbar {
+  width: 8px;
+}
+
+.leaderboard::-webkit-scrollbar-track {
+  background: rgba(44, 44, 44, 0.2);
+  border-radius: 10px;
+  border: 1px solid rgba(44, 44, 44, 0.3);
+}
+
+.leaderboard::-webkit-scrollbar-thumb {
+  background: #4ecdc4;
+  border-radius: 10px;
+  border: 1px solid #2c2c2c;
+  box-shadow: 2px 2px 4px rgba(44, 44, 44, 0.3);
+}
+
+.leaderboard::-webkit-scrollbar-thumb:hover {
+  background: #ff6b6b;
+  box-shadow: 2px 2px 6px rgba(44, 44, 44, 0.4);
+}
+
+
 
 .leaderboardItem {
   display: flex;
