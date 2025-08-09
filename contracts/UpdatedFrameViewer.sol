@@ -5,11 +5,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
- * @title SimpleFrameViewer
- * @dev Simple contract where each frame costs 0.001 MON directly from wallet
+ * @title UpdatedFrameViewer
+ * @dev Updated contract using frames 2 and 161 for better accessibility
  * @dev Perfect for gasless transactions with Privy embedded wallets
  */
-contract SimpleFrameViewer is Ownable, ReentrancyGuard {
+contract UpdatedFrameViewer is Ownable, ReentrancyGuard {
     // Frame viewing cost: 0.001 MON per frame
     uint256 public constant FRAME_COST = 0.001 ether; // 0.001 MON in wei
     
@@ -17,6 +17,7 @@ contract SimpleFrameViewer is Ownable, ReentrancyGuard {
     mapping(address => uint256) public frameUsage;
     mapping(address => uint256) public userSlapCount;
     mapping(address => uint256) public userCurrentSlapStart;
+    mapping(address => uint256) public userBalances; // For deposit system
     
     // Leaderboard tracking
     struct LeaderboardEntry {
@@ -33,17 +34,29 @@ contract SimpleFrameViewer is Ownable, ReentrancyGuard {
     event SlapStarted(address indexed user, uint256 timestamp);
     event SlapCompleted(address indexed user, uint256 slapCount, uint256 timestamp);
     event LeaderboardUpdated(address indexed user, uint256 slapCount, uint256 rank);
+    event TokensDeposited(address indexed user, uint256 amount);
 
     constructor() Ownable(msg.sender) {}
 
     /**
-     * @dev View a specific frame - each frame costs 0.001 MON
+     * @dev Deposit tokens to contract for frame viewing
+     */
+    function depositTokens() external payable {
+        require(msg.value > 0, "Must deposit some MON");
+        userBalances[msg.sender] += msg.value;
+        emit TokensDeposited(msg.sender, msg.value);
+    }
+
+    /**
+     * @dev View a specific frame - deducts from user's deposited balance
      * @param frameNumber The frame number to view (1-162)
      */
-    function viewFrame(uint256 frameNumber) external payable nonReentrant {
+    function viewFrame(uint256 frameNumber) external nonReentrant {
         require(frameNumber >= 1 && frameNumber <= 162, "Invalid frame number");
-        require(msg.value >= FRAME_COST, "Insufficient payment");
+        require(userBalances[msg.sender] >= FRAME_COST, "Insufficient balance");
         
+        // Deduct cost from user's balance
+        userBalances[msg.sender] -= FRAME_COST;
         frameUsage[msg.sender]++;
         
         // Track slap progress - Updated to use frames 2 and 161 for better accessibility
@@ -57,52 +70,45 @@ contract SimpleFrameViewer is Ownable, ReentrancyGuard {
             updateLeaderboard(msg.sender);
         }
         
-        emit FrameViewed(msg.sender, frameNumber, msg.value);
-        
-        // Refund excess payment
-        if (msg.value > FRAME_COST) {
-            payable(msg.sender).transfer(msg.value - FRAME_COST);
-        }
+        emit FrameViewed(msg.sender, frameNumber, FRAME_COST);
     }
 
     /**
      * @dev Batch view multiple frames
      * @param frameNumbers Array of frame numbers to view
      */
-    function viewFramesBatch(uint256[] calldata frameNumbers) external payable nonReentrant {
+    function viewFramesBatch(uint256[] calldata frameNumbers) external nonReentrant {
         uint256 totalCost = frameNumbers.length * FRAME_COST;
-        require(msg.value >= totalCost, "Insufficient payment");
+        require(userBalances[msg.sender] >= totalCost, "Insufficient balance");
+        
+        // Deduct total cost from user's balance
+        userBalances[msg.sender] -= totalCost;
         
         bool hasFrame2 = false;
         bool hasFrame161 = false;
-
+        
         for (uint256 i = 0; i < frameNumbers.length; i++) {
             uint256 frameNumber = frameNumbers[i];
             require(frameNumber >= 1 && frameNumber <= 162, "Invalid frame number");
-
+            
             frameUsage[msg.sender]++;
             emit FrameViewed(msg.sender, frameNumber, FRAME_COST);
-
+            
             if (frameNumber == 2) hasFrame2 = true;
             if (frameNumber == 161) hasFrame161 = true;
         }
-
+        
         // Handle slap completion for batch - Updated to use frames 2 and 161
         if (hasFrame2) {
             userCurrentSlapStart[msg.sender] = block.timestamp;
             emit SlapStarted(msg.sender, block.timestamp);
         }
-
+        
         if (hasFrame161 && userCurrentSlapStart[msg.sender] > 0) {
             userSlapCount[msg.sender]++;
             userCurrentSlapStart[msg.sender] = 0;
             emit SlapCompleted(msg.sender, userSlapCount[msg.sender], block.timestamp);
             updateLeaderboard(msg.sender);
-        }
-        
-        // Refund excess payment
-        if (msg.value > totalCost) {
-            payable(msg.sender).transfer(msg.value - totalCost);
         }
     }
 
@@ -157,6 +163,10 @@ contract SimpleFrameViewer is Ownable, ReentrancyGuard {
 
     function getCurrentSlapProgress(address user) external view returns (uint256) {
         return userCurrentSlapStart[user];
+    }
+
+    function getBalance(address user) external view returns (uint256) {
+        return userBalances[user];
     }
 
     function getLeaderboardLength() external view returns (uint256) {

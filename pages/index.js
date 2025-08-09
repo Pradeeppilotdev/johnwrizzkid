@@ -290,26 +290,28 @@ export default function Home() {
   const fetchLeaderboard = async () => {
     if (!wallets.length) return;
     try {
+      console.log('🔄 Fetching leaderboard...');
       // Create a simple public client for reading
       const { createPublicClient, http } = await import('viem');
       const publicClient = createPublicClient({
         chain: { id: 10143, name: 'Monad Testnet' },
         transport: http('https://testnet-rpc.monad.xyz/'),
       });
-      
+
       const [users, slapCounts] = await publicClient.readContract({
         address: contractAddress,
         abi: contractAbi,
         functionName: 'getTopUsers',
         args: [10], // Get top 10 users
       });
-      
+
       const leaderboardData = users.map((user, index) => ({
         address: user,
         slapCount: Number(slapCounts[index]),
         rank: index + 1,
       }));
-      
+
+      console.log('📊 Leaderboard updated:', leaderboardData);
       setLeaderboard(leaderboardData);
     } catch (err) {
       console.error('Failed to fetch leaderboard:', err);
@@ -320,13 +322,14 @@ export default function Home() {
   const fetchUserSlapCount = async () => {
     if (!wallets.length || !privyAddress) return;
     try {
+      console.log('👤 Fetching user data for:', privyAddress);
       // Create a simple public client for reading
       const { createPublicClient, http } = await import('viem');
       const publicClient = createPublicClient({
         chain: { id: 10143, name: 'Monad Testnet' },
         transport: http('https://testnet-rpc.monad.xyz/'),
       });
-      
+
       const [slapCount, userRank, contractBalance, walletBalance] = await Promise.all([
         publicClient.readContract({
           address: contractAddress,
@@ -354,6 +357,13 @@ export default function Home() {
       const previousWalletBalance = walletBalance;
       const newWalletBalance = Number(walletBalance);
       const newContractBalance = Number(contractBalance);
+
+      console.log('📊 User data updated:', {
+        slapCount: Number(slapCount),
+        userRank: Number(userRank),
+        contractBalance: newContractBalance,
+        walletBalance: newWalletBalance / 1e18
+      });
 
       setUserSlapCount(Number(slapCount));
       setUserRank(Number(userRank));
@@ -494,8 +504,8 @@ export default function Home() {
     }
 
     try {
-      // Check contract balance only for frames 1 and 162 (with retry for rate limiting)
-      if (frameNumber === 1 || frameNumber === 162) {
+      // Check contract balance only for frames 2 and 161 (more accessible than 1 and 162)
+      if (frameNumber === 2 || frameNumber === 161) {
         let contractBalance;
         try {
           const publicClient = createPublicClient({
@@ -531,10 +541,22 @@ export default function Home() {
         }
       }
 
+      // Map frontend frames to contract frames for compatibility
+      // Frontend Frame 2 → Contract Frame 1 (slap start)
+      // Frontend Frame 161 → Contract Frame 162 (slap complete)
+      let contractFrameNumber = frameNumber;
+      if (frameNumber === 2) {
+        contractFrameNumber = 1;
+        console.log('🔄 Mapping frontend Frame 2 → Contract Frame 1 (slap start)');
+      } else if (frameNumber === 161) {
+        contractFrameNumber = 162;
+        console.log('🔄 Mapping frontend Frame 161 → Contract Frame 162 (slap complete)');
+      }
+
       const viewFrameData = encodeFunctionData({
         abi: contractAbi,
         functionName: 'viewFrame',
-        args: [frameNumber],
+        args: [contractFrameNumber],
       });
 
       let txHash;
@@ -569,12 +591,12 @@ export default function Home() {
 
       // Dynamic gas limit based on frame complexity
       let gasLimit;
-      if (frameNumber === 162) {
-        gasLimit = '0x7A120'; // 500,000 gas for Frame 162 (leaderboard updates, slap completion)
-        console.log('🎯 Using high gas limit for Frame 162 completion');
-      } else if (frameNumber === 1) {
-        gasLimit = '0x30D40'; // 200,000 gas for Frame 1 (slap start)
-        console.log('🥊 Using medium gas limit for Frame 1 start');
+      if (frameNumber === 161) {
+        gasLimit = '0x7A120'; // 500,000 gas for Frame 161 (leaderboard updates, slap completion)
+        console.log('🎯 Using high gas limit for Frame 161 completion');
+      } else if (frameNumber === 2) {
+        gasLimit = '0x30D40'; // 200,000 gas for Frame 2 (slap start)
+        console.log('🥊 Using medium gas limit for Frame 2 start');
       } else {
         gasLimit = '0x186A0'; // 100,000 gas for other frames (shouldn't be used)
         console.log('⚡ Using standard gas limit for Frame', frameNumber);
@@ -626,10 +648,9 @@ export default function Home() {
       console.log('🚀 Gasless transaction sent via direct RPC:', txHash);
 
       // Add transaction notification
-      if (frameNumber === 1) {
+      if (frameNumber === 2) {
         addTransactionNotification('success', '🥊 Punch Started!', txHash);
         setSlapInProgress(true);
-
 
         // Show comic bubble for punch start
         const startTexts = ['POW!!', 'WHAM!', 'KAPOW!', 'SMACK!'];
@@ -639,11 +660,10 @@ export default function Home() {
         setComicBubble({ text: randomText, type: 'start', position: randomPosition });
         setTimeout(() => setComicBubble(null), 2000);
 
-      } else if (frameNumber === 162) {
+      } else if (frameNumber === 161) {
         addTransactionNotification('success', '💥 Punch Completed!', txHash);
         setSlapInProgress(false);
         setSessionPunchCount(prev => prev + 1); // Increment session counter
-
 
         // Show comic bubble for punch complete
         const completeTexts = ['BAM!!', 'BOOM!', 'WHOOSH!', 'CRASH!', 'ZAP!!'];
@@ -655,14 +675,24 @@ export default function Home() {
 
       } else {
         addTransactionNotification('success', `✅ Frame ${frameNumber} Viewed`, txHash);
-
       }
 
-      // Update leaderboard and user data after transaction
+      // Update leaderboard and user data after transaction with multiple retries
       setTimeout(() => {
         fetchLeaderboard();
         fetchUserSlapCount();
-      }, 2000);
+      }, 3000);
+
+      // Additional refresh after more time to ensure blockchain state is updated
+      setTimeout(() => {
+        fetchLeaderboard();
+        fetchUserSlapCount();
+      }, 8000);
+
+      // Final refresh to make sure leaderboard is current
+      setTimeout(() => {
+        fetchLeaderboard();
+      }, 15000);
 
     } catch (err) {
       console.error('Frame view transaction error:', err);
@@ -713,15 +743,14 @@ export default function Home() {
       if (frameNumber !== currentFrame && frameNumber >= 1 && frameNumber <= 162) {
         setCurrentFrame(frameNumber);
 
-        // Only trigger transaction for frames 1 and 162 (only these cost MON)
-        if (frameNumber === 1 || frameNumber === 162) {
+        // Only trigger transaction for frames 2 and 161 (only these cost MON)
+        if (frameNumber === 2 || frameNumber === 161) {
           handleFrameViewPrivy(frameNumber);
         } else {
-          // Frames 2-161 are free - just update UI, no transaction needed
-          setTxStatus(`✅ Frame ${frameNumber} viewed - FREE! No blockchain transaction needed.`);
+          // All other frames are free - just update UI, no transaction needed
 
-          // Update slap progress for free frames
-          if (frameNumber > 1 && frameNumber < 162) {
+          // Update slap progress for frames between 2 and 161
+          if (frameNumber > 2 && frameNumber < 161) {
             // We're in the middle of a slap, keep slap in progress
             setSlapInProgress(true);
           }
@@ -1000,7 +1029,7 @@ export default function Home() {
             </h1>
             <p style={{ fontSize: '1.3rem', marginBottom: '3rem', color: '#333', lineHeight: '1.6' }}>
               Experience the ultimate punch animation with <strong>blockchain transactions</strong>!<br/>
-              Only frames 1 & 162 cost 0.001 MON each. Frames 2-161 are completely FREE!
+              Only frames 2 & 161 cost 0.001 MON each. All other frames are completely FREE!
             </p>
             <button onClick={login} className={styles.connectButton}>
               Connect Wallet & Play
@@ -1180,7 +1209,28 @@ export default function Home() {
 
               {/* Right Side - Live Leaderboard */}
               <div className={styles.controlsPanel} style={{ transform: 'rotate(-1deg)' }}>
-                <h3>🏆 Leaderboard</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h3 style={{ margin: 0 }}>🏆 Leaderboard</h3>
+                  {/* <button
+                    onClick={() => {
+                      fetchLeaderboard();
+                      fetchUserSlapCount();
+                    }}
+                    style={{
+                      background: '#4ecdc4',
+                      color: 'white',
+                      border: '2px solid #2c2c2c',
+                      borderRadius: '8px',
+                      padding: '0.3rem 0.6rem',
+                      fontSize: '0.7rem',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)'
+                    }}
+                  >
+                    🔄 Refresh
+                  </button> */}
+                </div>
 
                 {/* Small doodle instruction text */}
                 <div style={{
@@ -1654,10 +1704,10 @@ export default function Home() {
                       • Move your cursor over John's image to control the animation
                     </p>
                     <p style={{ color: '#333', marginBottom: '0.5rem' }}>
-                      • Left side = Frame 1, Right side = Frame 162
+                      • Left side = Frame 2, Right side = Frame 161
                     </p>
                     <p style={{ color: '#333' }}>
-                      • Complete a punch: Frame 1 → Frame 162 (costs 0.002 MON total)
+                      • Complete a punch: Frame 2 → Frame 161 (costs 0.002 MON total)
                     </p>
                   </div>
 
@@ -1666,10 +1716,10 @@ export default function Home() {
                       ⚡ Step 3: Automatic Deductions
                     </h3>
                     <p style={{ color: '#333', marginBottom: '0.5rem' }}>
-                      • Only Frames 1 & 162 cost MON (0.001 each)
+                      • Only Frames 2 & 161 cost MON (0.001 each)
                     </p>
                     <p style={{ color: '#333', marginBottom: '0.5rem' }}>
-                      • Frames 2-161 are completely FREE!
+                      • All other frames are completely FREE!
                     </p>
                     <p style={{ color: '#333' }}>
                       • MON automatically deducted from your contract balance!
@@ -1684,13 +1734,13 @@ export default function Home() {
                       To record a punch on the blockchain:
                     </p>
                     <p style={{ color: '#856404', marginBottom: '0.3rem' }}>
-                      1. <strong>Start at Frame 1</strong> - This begins your punch
+                      1. <strong>Start at Frame 2</strong> - This begins your punch
                     </p>
                     <p style={{ color: '#856404', marginBottom: '0.3rem' }}>
-                      2. <strong>Move through frames</strong> - Navigate to Frame 162
+                      2. <strong>Move through frames</strong> - Navigate to Frame 161
                     </p>
                     <p style={{ color: '#856404' }}>
-                      3. <strong>Complete at Frame 162</strong> - This records your punch!
+                      3. <strong>Complete at Frame 161</strong> - This records your punch!
                     </p>
                   </div>
 
