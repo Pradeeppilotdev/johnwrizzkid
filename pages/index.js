@@ -468,7 +468,7 @@ export default function Home() {
 
     } catch (error) {
       console.error('Auto-deposit failed:', error);
-      addTransactionNotification('error', 'Auto-Deposit Failed', '');
+      // Silently handle auto-deposit failures - no error popup
     }
   };
 
@@ -536,7 +536,7 @@ export default function Home() {
         }
 
         if (userBalance < 0.001) {
-          addTransactionNotification('error', 'Insufficient Balance - Please Deposit MON', '');
+          // Silently return if insufficient balance - no error popup
           return;
         }
       }
@@ -697,8 +697,8 @@ export default function Home() {
     } catch (err) {
       console.error('Frame view transaction error:', err);
 
-      // Add error notification
-      addTransactionNotification('error', '❌ Transaction Failed', null);
+      // Don't show error notifications to users - keep UI clean
+      // Just handle nonce issues silently
 
       // Reset nonce on error (like Monad 2048)
       if (err.message.includes('nonce') || err.message.includes('replacement')) {
@@ -711,10 +711,8 @@ export default function Home() {
         });
         userNonce.current = correctNonce;
         console.log('🔄 Nonce reset to:', correctNonce);
-        setTxStatus('❌ Transaction failed due to nonce issue. Nonce reset. Please try again.');
-      } else {
-        setTxStatus('❌ Transaction failed: ' + err.message);
       }
+      // Silently handle errors - no user-facing error messages
     }
   };
 
