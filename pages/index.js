@@ -351,12 +351,114 @@ export default function Home() {
         }),
       ]);
 
+      const previousWalletBalance = walletBalance;
+      const newWalletBalance = Number(walletBalance);
+      const newContractBalance = Number(contractBalance);
+
       setUserSlapCount(Number(slapCount));
       setUserRank(Number(userRank));
-      setUserBalance(Number(contractBalance)); // Contract balance (for spending)
-      setWalletBalance(Number(walletBalance)); // Wallet balance
+      setUserBalance(newContractBalance); // Contract balance (for spending)
+      setWalletBalance(newWalletBalance); // Wallet balance
+
+      // Auto-deposit logic: check if auto-deposit is needed
+      const walletBalanceInMON = newWalletBalance / 1e18;
+      const shouldAutoDeposit = newContractBalance < 0.05 && walletBalanceInMON >= 0.2;
+
+      if (shouldAutoDeposit) {
+        // Check if wallet balance increased (new deposit) OR if this is first time checking existing balance
+        const isNewDeposit = previousWalletBalance > 0 && newWalletBalance > previousWalletBalance;
+        const isExistingBalance = previousWalletBalance === 0 && newWalletBalance > 0;
+
+        if (isNewDeposit || isExistingBalance) {
+          console.log('� Auto-deposit needed - Contract balance low and wallet has sufficient MON');
+          console.log(`Wallet: ${walletBalanceInMON.toFixed(4)} MON, Contract: ${newContractBalance.toFixed(4)} MON`);
+          setTimeout(() => handleAutoDeposit(0.2), 1000); // Small delay to ensure state is updated
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch user data:', err);
+    }
+  };
+
+  // Auto-deposit function using same approach as manual deposit
+  const handleAutoDeposit = async (amount) => {
+    if (!walletClient.current || !authenticated) return;
+
+    try {
+      addTransactionNotification('info', '🔄 Auto-Deposit Starting...', '');
+
+      const depositData = encodeFunctionData({
+        abi: contractAbi,
+        functionName: 'depositTokens',
+        args: [],
+      });
+
+      // Get current nonce and increment
+      const nonce = userNonce.current;
+      userNonce.current = nonce + 1;
+
+      // Get current gas prices
+      const publicClient = createPublicClient({
+        chain: monadTestnet,
+        transport: http('https://testnet-rpc.monad.xyz/'),
+      });
+
+      const gasPrice = await publicClient.getGasPrice();
+      const maxFeePerGas = gasPrice * 2n;
+      const maxPriorityFeePerGas = gasPrice / 10n;
+
+
+
+      // Prepare transaction parameters
+      const txParams = {
+        to: contractAddress,
+        data: depositData,
+        value: '0x' + BigInt(Number(amount) * 1e18).toString(16), // Amount in wei
+        nonce: '0x' + nonce.toString(16),
+        gas: '0x186A0', // 100,000 gas limit
+        maxFeePerGas: '0x' + maxFeePerGas.toString(16),
+        maxPriorityFeePerGas: '0x' + maxPriorityFeePerGas.toString(16),
+        chainId: '0x' + monadTestnet.id.toString(16),
+      };
+
+      // Sign transaction using Privy
+      const signedTransaction = await walletClient.current.request({
+        method: 'eth_signTransaction',
+        params: [txParams],
+      });
+
+      // Send directly via RPC
+      const response = await fetch('https://testnet-rpc.monad.xyz/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: '2.0',
+          method: 'eth_sendRawTransaction',
+          params: [signedTransaction],
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.error) {
+        throw new Error(`RPC Error: ${result.error.message}`);
+      }
+
+      const txHash = result.result;
+      addTransactionNotification('success', `💰 Auto-Deposited ${amount} MON`, txHash);
+
+      // Refresh balances after auto-deposit
+      setTimeout(() => {
+        fetchUserSlapCount();
+        fetchLeaderboard();
+      }, 3000);
+
+    } catch (error) {
+      console.error('Auto-deposit failed:', error);
+      addTransactionNotification('error', 'Auto-Deposit Failed', '');
     }
   };
 
@@ -423,12 +525,8 @@ export default function Home() {
           }
         }
 
-        const requiredAmount = BigInt(0.001 * 1e18); // 0.001 MON in wei
-
-        if (contractBalance < requiredAmount) {
-          const currentBalance = (Number(contractBalance) / 1e18).toFixed(4);
-          const frameType = frameNumber === 1 ? 'start a slap' : 'complete a slap';
-          setTxStatus(`❌ Insufficient contract balance! Privy wallet (${privyAddress}) has ${currentBalance} MON deposited, need 0.001 MON to ${frameType}. Please deposit more MON to the contract first.`);
+        if (userBalance < 0.001) {
+          addTransactionNotification('error', 'Insufficient Balance - Please Deposit MON', '');
           return;
         }
       }
@@ -531,7 +629,7 @@ export default function Home() {
       if (frameNumber === 1) {
         addTransactionNotification('success', '🥊 Punch Started!', txHash);
         setSlapInProgress(true);
-        setTxStatus(`🥊 Punch started! 0.001 MON deducted. Continue to frame 162 to complete it.`);
+
 
         // Show comic bubble for punch start
         const startTexts = ['POW!!', 'WHAM!', 'KAPOW!', 'SMACK!'];
@@ -545,7 +643,7 @@ export default function Home() {
         addTransactionNotification('success', '💥 Punch Completed!', txHash);
         setSlapInProgress(false);
         setSessionPunchCount(prev => prev + 1); // Increment session counter
-        setTxStatus(`💥 Punch completed! 0.001 MON deducted. Check the leaderboard!`);
+
 
         // Show comic bubble for punch complete
         const completeTexts = ['BAM!!', 'BOOM!', 'WHOOSH!', 'CRASH!', 'ZAP!!'];
@@ -557,7 +655,7 @@ export default function Home() {
 
       } else {
         addTransactionNotification('success', `✅ Frame ${frameNumber} Viewed`, txHash);
-        setTxStatus(`✅ Frame ${frameNumber} viewed! FREE - no MON deducted`);
+
       }
 
       // Update leaderboard and user data after transaction
@@ -938,21 +1036,21 @@ export default function Home() {
           {/* Clean Main Game Area */}
           <div className={styles.gameArea}>
             <div className={styles.gameContainer}>
-              {/* Left Side - Controls */}
-              <div className={styles.controlsPanel}>
-                <h3>🎮 Controls</h3>
+              {/* Left Side - Wallet & Deposit */}
+              <div className={styles.controlsPanel} style={{ transform: 'rotate(1deg)' }}>
+                <h3>💰 Wallet & Deposit</h3>
 
-                {/* Wallet Display */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.5rem', color: '#666' }}>
-                    Your Wallet:
+                {/* Wallet Address */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.3rem' }}>
+                    Your Wallet Address:
                   </div>
                   <div style={{
                     background: '#f8f8f8',
                     border: '2px solid #2c2c2c',
                     borderRadius: '8px',
                     padding: '0.5rem',
-                    fontSize: '0.8rem',
+                    fontSize: '0.7rem',
                     fontFamily: 'Monaco, monospace',
                     wordBreak: 'break-all',
                     marginBottom: '0.5rem'
@@ -965,56 +1063,44 @@ export default function Home() {
                       background: '#4ecdc4',
                       color: 'white',
                       border: '2px solid #2c2c2c',
-                      borderRadius: '15px',
+                      borderRadius: '8px',
                       padding: '0.3rem 0.8rem',
                       fontSize: '0.8rem',
+                      fontWeight: '600',
                       cursor: 'pointer',
-                      fontWeight: '600'
+                      boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)',
+                      width: '100%'
                     }}
                   >
                     {copyButtonText}
                   </button>
                 </div>
 
-                {/* Deposit */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.5rem', color: '#666' }}>
-                    Deposit MON:
+
+
+                {/* Auto-Deposit Button (if needed) */}
+                {(walletBalance / 1e18) >= 0.2 && userBalance < 0.05 && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <button
+                      onClick={() => handleAutoDeposit(0.2)}
+                      disabled={!smartAccountClient}
+                      style={{
+                        background: '#ff6b6b',
+                        color: 'white',
+                        border: '2px solid #2c2c2c',
+                        borderRadius: '15px',
+                        padding: '0.8rem',
+                        fontSize: '0.9rem',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        boxShadow: '3px 3px 0px rgba(44, 44, 44, 0.3)',
+                        width: '100%'
+                      }}
+                    >
+                      🚀 Auto-Deposit 0.2 MON
+                    </button>
                   </div>
-                  <input
-                    type="number"
-                    min="0.001"
-                    step="0.001"
-                    placeholder="0.002"
-                    value={depositAmount}
-                    onChange={e => setDepositAmount(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.8rem',
-                      border: '2px solid #2c2c2c',
-                      borderRadius: '8px',
-                      fontSize: '0.9rem',
-                      marginBottom: '0.5rem'
-                    }}
-                  />
-                  <button
-                    onClick={handleDeposit}
-                    disabled={!smartAccountClient || !depositAmount}
-                    style={{
-                      width: '100%',
-                      background: '#ff6b6b',
-                      color: 'white',
-                      border: '2px solid #2c2c2c',
-                      borderRadius: '15px',
-                      padding: '0.8rem',
-                      fontSize: '0.9rem',
-                      cursor: 'pointer',
-                      fontWeight: '600'
-                    }}
-                  >
-                    Deposit
-                  </button>
-                </div>
+                )}
 
                 {/* Frame Slider */}
                 <div>
@@ -1136,9 +1222,30 @@ export default function Home() {
 
                 {/* Real Leaderboard */}
                 <div style={{
-                  maxHeight: '300px',
-                  overflowY: 'auto'
+                  maxHeight: '280px',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  paddingRight: '8px',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#4ecdc4 #f0f0f0'
                 }}>
+                  <style jsx>{`
+                    div::-webkit-scrollbar {
+                      width: 8px;
+                    }
+                    div::-webkit-scrollbar-track {
+                      background: #f0f0f0;
+                      border-radius: 4px;
+                    }
+                    div::-webkit-scrollbar-thumb {
+                      background: #4ecdc4;
+                      border-radius: 4px;
+                      border: 1px solid #2c2c2c;
+                    }
+                    div::-webkit-scrollbar-thumb:hover {
+                      background: #45b7aa;
+                    }
+                  `}</style>
                   {leaderboard.length > 0 ? (
                     leaderboard.map((entry, index) => (
                       <div
@@ -1149,11 +1256,16 @@ export default function Home() {
                           alignItems: 'center',
                           padding: '0.5rem',
                           marginBottom: '0.5rem',
+                          marginRight: '4px',
                           background: entry.address.toLowerCase() === privyAddress.toLowerCase() ? '#e8f5e8' : '#f8f9fa',
                           border: entry.address.toLowerCase() === privyAddress.toLowerCase() ? '2px solid #4ecdc4' : '2px solid #2c2c2c',
                           borderRadius: '8px',
-                          fontSize: '0.8rem'
+                          fontSize: '0.8rem',
+                          transition: 'transform 0.1s ease',
+                          cursor: 'default'
                         }}
+                        onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'}
+                        onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
                       >
                         <div style={{ fontWeight: '700', color: '#ff6b6b', minWidth: '30px' }}>
                           #{index + 1}
@@ -1271,13 +1383,13 @@ export default function Home() {
                   </h3>
                   <div style={{ fontSize: '0.95rem', lineHeight: '1.6' }}>
                     <p style={{ color: '#333', marginBottom: '0.7rem', position: 'relative' }}>
-                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Copy your wallet address using the "Copy" button
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Copy your wallet address and get MON tokens
                     </p>
                     <p style={{ color: '#333', marginBottom: '0.7rem' }}>
-                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Get MON tokens and send them to your wallet address
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Send MON to your wallet address (minimum 0.2 MON)
                     </p>
                     <p style={{ color: '#333' }}>
-                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Enter desired amount and click "Deposit" to fund the contract
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> 0.2 MON automatically deposits to contract for punching!
                     </p>
                   </div>
                 </div>
@@ -1329,7 +1441,7 @@ export default function Home() {
                     textDecoration: 'underline',
                     textDecorationStyle: 'wavy'
                   }}>
-                     Step 3: Smart Transactions
+                     Step 3: Smart Deductions
                   </h3>
                   <div style={{ fontSize: '0.95rem', lineHeight: '1.6' }}>
                     <p style={{ color: '#333', marginBottom: '0.7rem' }}>
@@ -1339,7 +1451,7 @@ export default function Home() {
                       <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Frames 2-161 are completely FREE!
                     </p>
                     <p style={{ color: '#333' }}>
-                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> Efficient blockchain transactions for the best experience!
+                      <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>→</span> MON automatically deducted from your contract balance!
                     </p>
                   </div>
                 </div>
@@ -1429,7 +1541,7 @@ export default function Home() {
           </div>
 
           {/* Low Balance Warning */}
-          {authenticated && (userBalance < 0.1 || walletBalance < 0.1) && (
+          {authenticated && userBalance < 0.1 && (
             <div style={{
               position: 'fixed',
               bottom: '20px',
@@ -1441,25 +1553,20 @@ export default function Home() {
               border: '3px solid #2c2c2c',
               boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.3)',
               zIndex: 1000,
-              maxWidth: '300px',
+              maxWidth: '320px',
               fontFamily: 'Comic Sans MS, cursive, sans-serif'
             }}>
               <div style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '0.5rem' }}>
-                ⚠️ Low Balance Warning!
+                ⚠️ Contract Balance Low!
               </div>
               <div style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                {userBalance < 0.1 && walletBalance < 0.1 ? (
-                  <>Both your wallet and contract balance are low!</>
-                ) : userBalance < 0.1 ? (
-                  <>Your contract balance is low! Please deposit more MON.</>
-                ) : (
-                  <>Your wallet balance is low! Please add more MON to your wallet.</>
-                )}
+                Deposit more MON to the contract to keep punching!
               </div>
-              <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
-                {userBalance < 0.1 && `Contract: ${userBalance.toFixed(4)} MON`}
-                {userBalance < 0.1 && walletBalance < 0.1 && ' | '}
-                {walletBalance < 0.1 && `Wallet: ${(walletBalance / 1e18).toFixed(4)} MON`}
+              <div style={{ fontSize: '0.8rem', opacity: 0.9, marginBottom: '0.5rem' }}>
+                Contract Balance: {userBalance.toFixed(4)} MON
+              </div>
+              <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
+                💡 Each punch costs 0.002 MON (0.001 for start + 0.001 for complete)
               </div>
             </div>
           )}
