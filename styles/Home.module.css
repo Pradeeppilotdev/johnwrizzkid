@@ -1200,6 +1200,28 @@
     transform: none !important;
   }
 
+  /* Copy Button - SOLID COLORS for mobile visibility */
+  .controlsPanel button {
+    background: #4ecdc4 !important;
+    border: 2px solid #2c2c2c !important;
+    color: #2c2c2c !important;
+    font-weight: 700 !important;
+    box-shadow: 2px 2px 0px rgba(44, 44, 44, 0.3) !important;
+  }
+
+  .controlsPanel button:hover {
+    background: #45b7aa !important;
+    border-color: #2c2c2c !important;
+    color: #2c2c2c !important;
+  }
+
+  /* Specific override for copy button with inline styles */
+  .controlsPanel button[style*="background"] {
+    background: #4ecdc4 !important;
+    color: #2c2c2c !important;
+    font-weight: 700 !important;
+  }
+
   /* Frame Number - Corner only, smaller */
   .frameNumber {
     font-size: 0.6rem;
@@ -1660,5 +1682,27 @@
     padding: 0.15rem 0.3rem !important;
     font-size: 0.4rem !important;
     border-radius: 4px !important;
+  }
+
+  /* Copy Button - EXTRA DARK for small screens */
+  .copyButton {
+    background: rgba(78, 205, 196, 0.5) !important;
+    border: 2px solid rgba(78, 205, 196, 0.7) !important;
+    color: #2c2c2c !important;
+    font-weight: 700 !important;
+    box-shadow: 1px 1px 0px rgba(44, 44, 44, 0.3) !important;
+  }
+
+  .copyButton:hover {
+    background: rgba(78, 205, 196, 0.7) !important;
+    border-color: rgba(78, 205, 196, 0.9) !important;
+    color: #2c2c2c !important;
+  }
+
+  .copyButton.copied {
+    background: rgba(46, 204, 113, 0.6) !important;
+    border-color: rgba(46, 204, 113, 0.8) !important;
+    color: #2c2c2c !important;
+    font-weight: 700 !important;
   }
 }

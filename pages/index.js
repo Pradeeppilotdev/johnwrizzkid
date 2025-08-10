@@ -1109,12 +1109,12 @@ export default function Home() {
                     onClick={copyWalletAddress}
                     style={{
                       background: '#4ecdc4',
-                      color: 'white',
+                      color: '#2c2c2c',
                       border: '2px solid #2c2c2c',
                       borderRadius: '8px',
                       padding: '0.3rem 0.8rem',
                       fontSize: '0.8rem',
-                      fontWeight: '600',
+                      fontWeight: '700',
                       cursor: 'pointer',
                       boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)',
                       width: '100%'
