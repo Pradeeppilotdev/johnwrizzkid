@@ -972,14 +972,342 @@
   }
 }
 
+/* MOBILE-ONLY OPTIMIZATIONS - PERFECT LAYOUT */
 @media (max-width: 768px) {
-  .frameContainer {
-    width: 600px;
-    height: 338px;
+  /* Container - No horizontal scroll */
+  .container {
+    padding: 0.5rem;
+    overflow-x: hidden;
   }
 
+  /* Header - Compact and organized */
+  .header {
+    padding: 0.8rem 0.5rem;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .logo {
+    font-size: 1.4rem;
+    transform: rotate(-1deg);
+  }
+
+  .userInfo {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.3rem;
+    font-size: 0.6rem;
+  }
+
+  .balance {
+    padding: 0.3rem 0.6rem;
+    border-radius: 8px;
+    font-size: 0.6rem;
+    transform: none;
+    box-shadow: 2px 2px 0px #2c2c2c;
+  }
+
+  /* Game Area - Vertical stack, centered */
+  .gameArea {
+    padding: 0.5rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
+  .gameContainer {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    width: 100%;
+    max-width: 350px;
+  }
+
+  /* Frame Container - Optimized for full touch range */
+  .frameContainer {
+    width: 88vw;
+    max-width: 340px;
+    height: auto;
+    aspect-ratio: 1.1;
+    transform: none;
+    margin: 0 auto;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 3px 3px 0px rgba(44, 44, 44, 0.2);
+  }
+
+  .frameImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Control Panels - DOODLE STYLE RECTANGLES (no fixed ratio) */
+  .controlsPanel {
+    width: 85vw;
+    max-width: 320px;
+    padding: 0.4rem 0.6rem;
+    border-radius: 12px;
+    transform: none;
+    box-shadow: 3px 3px 0px rgba(44, 44, 44, 0.2);
+    border: 2px solid rgba(44, 44, 44, 0.3);
+    font-size: 0.6rem;
+    margin-bottom: 0.6rem;
+    background: rgba(255, 255, 255, 0.95);
+    min-height: auto;
+  }
+
+  .controlsPanel h3 {
+    font-size: 0.7rem;
+    margin-bottom: 0.2rem;
+    margin-top: 0;
+    color: #2c2c2c;
+    font-weight: 700;
+  }
+
+  /* Leaderboard - OLD COMPACT LOOK */
   .leaderboard {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .leaderboardEntry {
+    padding: 0.4rem;
+    font-size: 0.7rem;
+  }
+
+  /* Instructions popup - MOBILE FRIENDLY BOX */
+  .instructions-popup {
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 10px !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    padding: 0.8rem !important;
+    font-size: 0.6rem !important;
+    border-radius: 12px !important;
+    border: 2px solid rgba(44, 44, 44, 0.3) !important;
+    box-shadow: 3px 3px 0px rgba(44, 44, 44, 0.2) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+    z-index: 1000 !important;
+  }
+
+  /* Instructions content - COMPACT */
+  .instructions-popup h2 {
+    font-size: 1rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .instructions-popup h3 {
+    font-size: 0.8rem !important;
+    margin-bottom: 0.3rem !important;
+  }
+
+  .instructions-popup p {
+    font-size: 0.6rem !important;
+    margin-bottom: 0.2rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .instructions-popup > div {
+    margin-bottom: 0.8rem !important;
+  }
+
+  /* Main Instructions Section - MOBILE FRIENDLY */
+  .instructionsSection {
+    max-width: 95vw !important;
+    margin: 1rem auto !important;
+    padding: 0 0.5rem !important;
+  }
+
+  .instructionsSection > div {
+    padding: 1rem !important;
+    border-radius: 15px !important;
+    transform: none !important;
+    box-shadow: 3px 3px 0px rgba(44, 44, 44, 0.2) !important;
+  }
+
+  .instructionsSection h2 {
+    font-size: 1.2rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .instructionsSection h3 {
+    font-size: 0.9rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .instructionsSection p {
+    font-size: 0.7rem !important;
+    margin-bottom: 0.4rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .instructionsSection > div > div {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .instructionsSection > div > div > div {
+    padding: 0.8rem !important;
+    transform: none !important;
+  }
+
+  /* Transaction Notifications - BOTTOM RIGHT position, compact */
+  .transactionNotifications {
+    top: auto !important;
+    bottom: 20px !important;
+    right: 10px !important;
+    left: auto !important;
+    width: 200px !important;
+    display: block !important;
+  }
+
+  .transactionNotification {
+    padding: 0.3rem 0.5rem !important;
+    font-size: 0.55rem !important;
+    border-radius: 8px !important;
+    margin-bottom: 0.4rem !important;
+    max-width: 200px !important;
+    text-align: left !important;
+    transform: none !important;
+    box-shadow: 2px 2px 0px rgba(44, 44, 44, 0.3) !important;
+  }
+
+  .transactionTitle {
+    font-size: 0.55rem !important;
+    margin-bottom: 0.2rem !important;
+    font-weight: 600 !important;
+  }
+
+  .transactionHash {
+    font-size: 0.45rem !important;
+    margin-bottom: 0.2rem !important;
+  }
+
+  .explorerLink {
+    padding: 0.2rem 0.4rem !important;
+    font-size: 0.45rem !important;
+    border-radius: 6px !important;
+    transform: none !important;
+  }
+
+  /* Frame Number - Corner only, smaller */
+  .frameNumber {
+    font-size: 0.6rem;
+    padding: 0.2rem 0.3rem;
+    top: 6px;
+    right: 6px;
+    left: auto;
+    background: rgba(44, 44, 44, 0.8);
+    color: white;
+    border-radius: 4px;
+  }
+
+  /* Comic Bubbles - Keep fun effects like POW, KAPOW */
+  .comicBubble {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 12px;
+    /* Let them position naturally - they're fun! */
+  }
+
+  /* Buttons - DOODLE STYLE */
+  .button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.6rem;
+    border-radius: 8px;
+    border: 2px solid rgba(44, 44, 44, 0.3);
+    box-shadow: 2px 2px 0px rgba(44, 44, 44, 0.2);
+  }
+
+  /* Control Panel Buttons - COMPACT DOODLE STYLE */
+  .controlsPanel button {
+    padding: 0.25rem 0.4rem !important;
+    font-size: 0.5rem !important;
+    border-radius: 6px !important;
+    margin: 0.1rem 0.05rem !important;
+    border: 2px solid rgba(44, 44, 44, 0.3) !important;
+    box-shadow: 2px 2px 0px rgba(44, 44, 44, 0.2) !important;
+    background: rgba(78, 205, 196, 0.1) !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .controlsPanel button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 3px 3px 0px rgba(44, 44, 44, 0.3) !important;
+  }
+
+  /* Control Panel Inputs - COMPACT DOODLE STYLE */
+  .controlsPanel input {
+    padding: 0.2rem 0.3rem !important;
+    font-size: 0.5rem !important;
+    border-radius: 6px !important;
+    margin: 0.1rem 0 !important;
+    border: 2px solid rgba(44, 44, 44, 0.3) !important;
+    box-shadow: inset 1px 1px 0px rgba(44, 44, 44, 0.1) !important;
+  }
+
+  /* Control Panel Text - COMPACT */
+  .controlsPanel p, .controlsPanel div {
+    margin: 0.1rem 0 !important;
+    font-size: 0.5rem !important;
+    line-height: 1.2 !important;
+    color: #2c2c2c !important;
+  }
+
+  /* Session Punches Box - COMPACT */
+  .sessionPunches {
+    max-width: 200px !important;
+    padding: 0.4rem !important;
+    margin: 0 auto 0.6rem auto !important;
+  }
+
+  .sessionPunches > div:first-child {
+    font-size: 0.6rem !important;
+    margin-bottom: 0.2rem !important;
+  }
+
+  .sessionPunches > div:last-child {
+    font-size: 1.2rem !important;
+  }
+
+  /* Disconnect Button - COMPACT */
+  .userInfo button {
+    padding: 0.3rem 0.6rem !important;
+    font-size: 0.6rem !important;
+    border-radius: 8px !important;
+  }
+
+  /* Hide desktop-only elements */
+  .desktopOnly {
+    display: none;
+  }
+
+  /* Hide instructions completely on mobile */
+  .instructionsButton {
+    display: none !important;
+  }
+
+  /* Small screen leaderboard entries - OLD LOOK */
+  .leaderboardEntry {
+    padding: 0.3rem;
+    font-size: 0.6rem;
+    margin-bottom: 0.2rem;
+  }
+
+  /* Small screen leaderboard container - OLD LOOK */
+  .leaderboard {
+    max-height: 150px;
+    padding: 0.4rem;
   }
 }
 
@@ -1155,4 +1483,182 @@
     height: auto !important;
     max-width: 640px;
   }
-} 
+}
+
+/* Extra Small Mobile Screens - Ultra Compact */
+@media (max-width: 480px) {
+  .frameContainer {
+    width: 90vw;
+    max-width: 320px;
+    aspect-ratio: 1.0;
+  }
+
+  .controlsPanel {
+    width: 90vw;
+    max-width: 280px;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.55rem;
+    margin-bottom: 0.5rem;
+    border: 2px solid rgba(44, 44, 44, 0.3);
+    box-shadow: 2px 2px 0px rgba(44, 44, 44, 0.2);
+  }
+
+  /* Small screen compact buttons */
+  .controlsPanel button {
+    padding: 0.2rem 0.35rem !important;
+    font-size: 0.45rem !important;
+    border-radius: 5px !important;
+    margin: 0.08rem 0.05rem !important;
+    border: 2px solid rgba(44, 44, 44, 0.3) !important;
+    box-shadow: 1px 1px 0px rgba(44, 44, 44, 0.2) !important;
+  }
+
+  .controlsPanel h3 {
+    font-size: 0.6rem;
+    margin-bottom: 0.15rem;
+    margin-top: 0;
+    font-weight: 700;
+  }
+
+  .controlsPanel input {
+    padding: 0.18rem 0.25rem !important;
+    font-size: 0.45rem !important;
+    border-radius: 5px !important;
+    border: 2px solid rgba(44, 44, 44, 0.3) !important;
+    margin: 0.08rem 0 !important;
+  }
+
+  .controlsPanel p, .controlsPanel div {
+    margin: 0.08rem 0 !important;
+    font-size: 0.45rem !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Session Punches Box - EXTRA COMPACT for small screens */
+  .sessionPunches {
+    max-width: 180px !important;
+    padding: 0.3rem !important;
+    margin: 0 auto 0.5rem auto !important;
+  }
+
+  .sessionPunches > div:first-child {
+    font-size: 0.5rem !important;
+    margin-bottom: 0.15rem !important;
+  }
+
+  .sessionPunches > div:last-child {
+    font-size: 1rem !important;
+  }
+
+  /* Disconnect Button - EXTRA COMPACT for small screens */
+  .userInfo button {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.5rem !important;
+    border-radius: 6px !important;
+  }
+
+  /* Instructions popup - EXTRA COMPACT for small screens */
+  .instructions-popup {
+    top: 5px !important;
+    left: 5px !important;
+    right: 5px !important;
+    bottom: 5px !important;
+    padding: 0.6rem !important;
+    font-size: 0.5rem !important;
+  }
+
+  .instructions-popup h2 {
+    font-size: 0.9rem !important;
+    margin-bottom: 0.4rem !important;
+  }
+
+  .instructions-popup h3 {
+    font-size: 0.7rem !important;
+    margin-bottom: 0.25rem !important;
+  }
+
+  .instructions-popup p {
+    font-size: 0.5rem !important;
+    margin-bottom: 0.15rem !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Main Instructions Section - EXTRA COMPACT for small screens */
+  .instructionsSection {
+    max-width: 98vw !important;
+    margin: 0.8rem auto !important;
+    padding: 0 0.3rem !important;
+  }
+
+  .instructionsSection > div {
+    padding: 0.8rem !important;
+    border-radius: 12px !important;
+  }
+
+  .instructionsSection h2 {
+    font-size: 1rem !important;
+    margin-bottom: 0.8rem !important;
+  }
+
+  .instructionsSection h3 {
+    font-size: 0.8rem !important;
+    margin-bottom: 0.4rem !important;
+  }
+
+  .instructionsSection p {
+    font-size: 0.6rem !important;
+    margin-bottom: 0.3rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .instructionsSection > div > div > div {
+    padding: 0.6rem !important;
+  }
+
+  /* Keep comic bubbles fun on small screens too */
+
+  .logo {
+    font-size: 1.2rem;
+  }
+
+  .userInfo {
+    font-size: 0.5rem;
+  }
+
+  .balance {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.5rem;
+  }
+
+  /* Transaction Notifications - BOTTOM RIGHT, extra compact */
+  .transactionNotifications {
+    bottom: 15px !important;
+    right: 8px !important;
+    top: auto !important;
+    width: 180px !important;
+  }
+
+  .transactionNotification {
+    padding: 0.25rem 0.4rem !important;
+    font-size: 0.5rem !important;
+    max-width: 180px !important;
+    margin-bottom: 0.3rem !important;
+    border-radius: 6px !important;
+  }
+
+  .transactionTitle {
+    font-size: 0.5rem !important;
+    margin-bottom: 0.15rem !important;
+  }
+
+  .transactionHash {
+    font-size: 0.4rem !important;
+    margin-bottom: 0.15rem !important;
+  }
+
+  .explorerLink {
+    padding: 0.15rem 0.3rem !important;
+    font-size: 0.4rem !important;
+    border-radius: 4px !important;
+  }
+}

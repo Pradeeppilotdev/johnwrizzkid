@@ -146,9 +146,10 @@ export default function Home() {
     if (wallets.length > 0) {
       wallets[0].switchChain(monadTestnet.id); // Monad Testnet chain ID
 
-      // Check if first time user and show instructions
+      // Check if first time user and show instructions (desktop only)
       const hasSeenInstructions = localStorage.getItem('johnwrizzkid-instructions-seen');
-      if (!hasSeenInstructions) {
+      const isMobile = window.innerWidth <= 768;
+      if (!hasSeenInstructions && !isMobile) {
         setShowInstructions(true);
       }
     }
@@ -719,43 +720,57 @@ export default function Home() {
   // Throttled frame update for better performance
   const frameUpdateRef = useRef(null);
 
-  // Handle frame movement (mouse) with performance optimization
-  const handleMouseMove = useCallback((e) => {
+  // Eelslap-style interaction - position directly controls frame
+  const updateFrameFromPosition = useCallback((clientX) => {
     if (!containerRef.current) return;
 
-    // Cancel previous frame update if still pending
-    if (frameUpdateRef.current) {
-      cancelAnimationFrame(frameUpdateRef.current);
-    }
+    const container = containerRef.current;
+    const rect = container.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, x / rect.width)); // Clamp between 0-1
+    const frameNumber = Math.floor(percentage * 162) + 1;
 
-    // Use requestAnimationFrame for smooth updates
-    frameUpdateRef.current = requestAnimationFrame(() => {
-      const container = containerRef.current;
-      if (!container) return;
+    if (frameNumber !== currentFrame && frameNumber >= 1 && frameNumber <= 162) {
+      setCurrentFrame(frameNumber);
 
-      const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const percentage = Math.max(0, Math.min(1, x / rect.width)); // Clamp between 0-1
-      const frameNumber = Math.floor(percentage * 162) + 1;
-
-      if (frameNumber !== currentFrame && frameNumber >= 1 && frameNumber <= 162) {
-        setCurrentFrame(frameNumber);
-
-        // Only trigger transaction for frames 2 and 161 (only these cost MON)
-        if (frameNumber === 2 || frameNumber === 161) {
-          handleFrameViewPrivy(frameNumber);
-        } else {
-          // All other frames are free - just update UI, no transaction needed
-
-          // Update slap progress for frames between 2 and 161
-          if (frameNumber > 2 && frameNumber < 161) {
-            // We're in the middle of a slap, keep slap in progress
-            setSlapInProgress(true);
-          }
+      // Only trigger transaction for frames 2 and 161 (only these cost MON)
+      if (frameNumber === 2 || frameNumber === 161) {
+        handleFrameViewPrivy(frameNumber);
+      } else {
+        // All other frames are free - just update UI, no transaction needed
+        // Update slap progress for frames between 2 and 161
+        if (frameNumber > 2 && frameNumber < 161) {
+          setSlapInProgress(true);
         }
       }
-    });
+    }
   }, [currentFrame]);
+
+  // Handle mouse movement (desktop)
+  const handleMouseMove = useCallback((e) => {
+    if (!containerRef.current) return;
+    updateFrameFromPosition(e.clientX);
+  }, [updateFrameFromPosition]);
+
+  // Handle touch movement (mobile)
+  const handleTouchMove = useCallback((e) => {
+    if (!containerRef.current) return;
+    e.preventDefault(); // Prevent scrolling
+    const touch = e.touches[0];
+    if (touch) {
+      updateFrameFromPosition(touch.clientX);
+    }
+  }, [updateFrameFromPosition]);
+
+  // Handle touch start (mobile)
+  const handleTouchStart = useCallback((e) => {
+    if (!containerRef.current) return;
+    e.preventDefault(); // Prevent scrolling
+    const touch = e.touches[0];
+    if (touch) {
+      updateFrameFromPosition(touch.clientX);
+    }
+  }, [updateFrameFromPosition]);
 
   // Deposit MON to contract using available wallet
   const handleDeposit = async () => {
@@ -949,12 +964,18 @@ export default function Home() {
       timestamp: Date.now()
     };
 
-    setTransactionNotifications(prev => [notification, ...prev.slice(0, 2)]); // Keep max 3 notifications
+    // On mobile, show only one notification at a time (replace previous)
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+      setTransactionNotifications([notification]); // Only one notification on mobile
+    } else {
+      setTransactionNotifications(prev => [notification, ...prev.slice(0, 2)]); // Keep max 3 notifications on desktop
+    }
 
-    // Auto-remove after 10 seconds
+    // Auto-remove after shorter time on mobile
     setTimeout(() => {
       setTransactionNotifications(prev => prev.filter(n => n.id !== notification.id));
-    }, 10000);
+    }, isMobile ? 5000 : 10000); // 5 seconds on mobile, 10 seconds on desktop
   };
 
   // Close instructions and mark as seen
@@ -1148,7 +1169,9 @@ export default function Home() {
               {/* Center - Clean Square Frame */}
               <div className={styles.slapFrame}>
                 {/* Session Punch Counter */}
-                <div style={{
+                <div
+                  className={styles.sessionPunches}
+                  style={{
                   textAlign: 'center',
                   marginBottom: '1rem',
                   padding: '0.8rem',
@@ -1170,8 +1193,13 @@ export default function Home() {
                   className={styles.frameContainer}
                   ref={containerRef}
                   onMouseMove={handleMouseMove}
-                  onMouseLeave={() => setCurrentFrame(1)}
-                  style={{ position: 'relative' }}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={() => {}} // Keep frame where user lifted finger (eelslap style)
+                  style={{
+                    position: 'relative',
+                    touchAction: 'none' // Prevent default touch behaviors
+                  }}
                 >
                   <img
                     src={frameSrc}
@@ -1353,7 +1381,9 @@ export default function Home() {
           </div>
 
           {/* Doodle-Style Instructions Section Below Game */}
-          <div style={{
+          <div
+            className={styles.instructionsSection}
+            style={{
             maxWidth: '1200px',
             margin: '3rem auto 2rem auto',
             padding: '0 2rem'
