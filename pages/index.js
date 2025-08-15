@@ -93,6 +93,42 @@ const contractAbi = [
 ];
 const contractAddress = '0x28Cb014Ab8da78E23e4c1cB84c06ac03Ae6720aA'; // SimpleFrameViewer contract
 
+// Optional airdrop/dripper contract for first-time users
+const airdropContractAddress = process.env.NEXT_PUBLIC_AIRDROP_CONTRACT_ADDRESS || '';
+const airdropAbi = [
+    {
+        inputs: [],
+        name: 'claimAirdrop',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
+        inputs: [{ name: 'user', type: 'address' }],
+        name: 'hasUserClaimed',
+        outputs: [{ name: '', type: 'bool' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+];
+// Alternate common naming for native faucets
+const airdropAbiAlt = [
+    {
+        inputs: [],
+        name: 'claim',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
+        inputs: [{ name: 'user', type: 'address' }],
+        name: 'hasUserClaimed',
+        outputs: [{ name: '', type: 'bool' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+];
+
 export default function Home() {
   const [currentFrame, setCurrentFrame] = useState(1);
   const [smartAccountClient, setSmartAccountClient] = useState(null);
@@ -111,6 +147,7 @@ export default function Home() {
   const [showInstructions, setShowInstructions] = useState(false); // Instructions popup
   const [comicBubble, setComicBubble] = useState(null); // For comic speech bubbles
   const containerRef = useRef(null);
+  const [hasAttemptedAirdrop, setHasAttemptedAirdrop] = useState(false);
 
   // Safe Privy hooks with fallbacks
   let ready = false, authenticated = false, login = () => {}, logout = () => {}, user = null;
@@ -152,6 +189,8 @@ export default function Home() {
       if (!hasSeenInstructions && !isMobile) {
         setShowInstructions(true);
       }
+
+
     }
   }, [wallets]);
 
@@ -209,6 +248,11 @@ export default function Home() {
         // Add welcome notification
         addTransactionNotification('success', '🎉 Wallet Connected!', null);
         setTxStatus('✅ Privy embedded wallet ready! Gasless transactions enabled (Monad 2048 approach)');
+
+        // Attempt first-time airdrop (once per session) if configured
+        if (!hasAttemptedAirdrop && airdropContractAddress) {
+          setTimeout(() => tryFirstTimeAirdrop(), 2000); // Small delay to ensure everything is ready
+        }
       } catch (error) {
         console.error('❌ Failed to setup wallet client:', error);
         setTxStatus('❌ Wallet setup failed: ' + error.message);
@@ -369,7 +413,7 @@ export default function Home() {
       setUserSlapCount(Number(slapCount));
       setUserRank(Number(userRank));
       setUserBalance(newContractBalance); // Contract balance (for spending)
-      setWalletBalance(newWalletBalance); // Wallet balance
+      setWalletBalance(newWalletBalance); // Wallet balance (wei)
 
       // Auto-deposit logic: check if auto-deposit is needed
       const walletBalanceInMON = newWalletBalance / 1e18;
@@ -978,6 +1022,59 @@ export default function Home() {
     }, isMobile ? 5000 : 10000); // 5 seconds on mobile, 10 seconds on desktop
   };
 
+  // Replace the existing tryFirstTimeAirdrop function with this:
+
+const tryFirstTimeAirdrop = useCallback(async () => {
+  try {
+    console.log('�� Attempting gasless airdrop via relayer...');
+    
+    if (!authenticated || !wallets.length || !privyAddress) {
+      console.log('❌ Airdrop skipped - not authenticated or no wallet');
+      return;
+    }
+
+    // Prevent repeat attempts this session
+    setHasAttemptedAirdrop(true);
+
+    // Check if user already claimed (local check)
+    const storageKey = `johnwrizzkid-airdrop-claimed-${privyAddress.toLowerCase()}`;
+    const alreadyClaimedLocal = localStorage.getItem(storageKey) === '1';
+    
+    if (alreadyClaimedLocal) {
+      console.log('❌ Airdrop skipped - already claimed locally');
+      return;
+    }
+
+    // Call the relayer API instead of blockchain directly
+    addTransactionNotification('info', 'Claiming welcome Drop (0.8 MON)...', '');
+    
+    const response = await fetch('/api/relayer/airdrop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userAddress: privyAddress })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      console.log('🎉 Airdrop claimed successfully! TX Hash:', result.hash);
+      addTransactionNotification('success', '🎉 Drop claimed! +0.8 MON', result.hash);
+      localStorage.setItem(storageKey, '1');
+
+      // Refresh balances after airdrop settles
+      setTimeout(() => {
+        fetchUserSlapCount();
+        fetchLeaderboard();
+      }, 3000);
+    } else {
+      throw new Error(result.error || 'Airdrop failed');
+    }
+
+  } catch (error) {
+    console.error('❌ Airdrop failed:', error);
+    //addTransactionNotification('error', '❌ Airdrop failed: ' + error.message, null);
+  }
+}, [authenticated, wallets, privyAddress]);
   // Close instructions and mark as seen
   const closeInstructions = () => {
     setShowInstructions(false);
@@ -1618,36 +1715,170 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Low Balance Warning */}
-          {authenticated && userBalance < 0.1 && (
-            <div style={{
-              position: 'fixed',
-              bottom: '20px',
-              right: '20px',
-              background: '#ff6b6b',
-              color: 'white',
-              padding: '1rem 1.5rem',
-              borderRadius: '15px',
-              border: '3px solid #2c2c2c',
-              boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.3)',
-              zIndex: 1000,
-              maxWidth: '320px',
-              fontFamily: 'Comic Sans MS, cursive, sans-serif'
-            }}>
-              <div style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '0.5rem' }}>
-                ⚠️ Contract Balance Low!
-              </div>
-              <div style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                Deposit more MON to the contract to keep punching!
-              </div>
-              <div style={{ fontSize: '0.8rem', opacity: 0.9, marginBottom: '0.5rem' }}>
-                Contract Balance: {userBalance.toFixed(4)} MON
-              </div>
-              <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                💡 Each punch costs 0.002 MON (0.001 for start + 0.001 for complete)
-              </div>
-            </div>
-          )}
+          {/* Contract Balance Warning - Right Corner (Small) */}
+          {authenticated && userBalance < 0.1 && window.innerWidth > 768 && (
+  <div style={{
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    background: '#ff6b6b',
+    color: 'white',
+    padding: '1rem 1.5rem',
+    borderRadius: '15px',
+    border: '3px solid #2c2c2c',
+    boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.3)',
+    zIndex: 1000,
+    maxWidth: '320px',
+    fontFamily: 'Comic Sans MS, cursive, sans-serif'
+  }}>
+    <div style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '0.5rem' }}>
+      ⚠️ Contract Balance Low!
+    </div>
+    <div style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+      Deposit more MON to the contract to keep punching!
+    </div>
+    <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+      Current: {(userBalance / 1e18).toFixed(4)} MON
+    </div>
+  </div>
+)}
+
+{/* Contract Balance Warning - Mobile (Current Compact Style) */}
+{authenticated && userBalance < 0.1 && window.innerWidth > 768 && (
+  <div style={{
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    background: '#ff6b6b',
+    color: 'white',
+    padding: '1rem 1.5rem',
+    borderRadius: '15px',
+    border: '3px solid #2c2c2c',
+    boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.3)',
+    zIndex: 1000,
+    maxWidth: '320px',
+    fontFamily: 'Comic Sans MS, cursive, sans-serif'
+  }}>
+    <div style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '0.5rem' }}>
+      ⚠️ Contract Balance Low!
+    </div>
+    <div style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+      Deposit more MON to the contract to keep punching!
+    </div>
+    <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+      Current: {(userBalance / 1e18).toFixed(4)} MON
+    </div>
+  </div>
+)}
+
+{/* Contract Balance Warning - Mobile (Current Compact Style) */}
+{authenticated && userBalance < 0.1 && window.innerWidth <= 768 && (
+  <div style={{
+    position: 'fixed',
+    bottom: '15px',
+    right: '15px',
+    background: '#ff6b6b',
+    color: 'white',
+    padding: '0.6rem 0.8rem',
+    borderRadius: '8px',
+    border: '2px solid #2c2c2c',
+    boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)',
+    zIndex: 1000,
+    maxWidth: '200px',
+    fontSize: '0.75rem',
+    fontFamily: 'Comic Sans MS, cursive, sans-serif',
+    transform: 'rotate(1deg)'
+  }}>
+    <div style={{ fontSize: '0.8rem', fontWeight: '700', marginBottom: '0.2rem' }}>
+      ⚠️ Contract Low
+    </div>
+    <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>
+      {userBalance.toFixed(3)} MON
+    </div>
+  </div>
+)}
+
+{/* Wallet Low Balance Warning - Desktop (Original Large Style) */}
+{authenticated && (walletBalance / 1e18) < 0.04 && window.innerWidth > 768 && (
+  <div style={{
+    position: 'fixed',
+    bottom: '20px',
+    left: '20px',
+    background: '#ffc107',
+    color: '#2c2c2c',
+    padding: '1rem 1.5rem',
+    borderRadius: '15px',
+    border: '3px solid #2c2c2c',
+    boxShadow: '4px 4px 0px rgba(44, 44, 44, 0.3)',
+    zIndex: 1000,
+    maxWidth: '320px',
+    fontFamily: 'Comic Sans MS, cursive, sans-serif'
+  }}>
+    <div style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '0.5rem' }}>
+      ⚠️ Wallet Balance Low!
+    </div>
+    <div style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+      Top up your wallet to continue playing smoothly.
+    </div>
+    <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+      Current: {((walletBalance / 1e18).toFixed(4))} MON
+    </div>
+  </div>
+)}
+
+{/* Wallet Low Balance Warning - Mobile (Current Compact Style) */}
+{authenticated && (walletBalance / 1e18) < 0.04 && window.innerWidth <= 768 && (
+  <div style={{
+    position: 'fixed',
+    bottom: '15px',
+    left: '15px',
+    background: '#ffc107',
+    color: '#2c2c2c',
+    padding: '0.6rem 0.8rem',
+    borderRadius: '8px',
+    border: '2px solid #2c2c2c',
+    boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)',
+    zIndex: 1000,
+    maxWidth: '200px',
+    fontSize: '0.75rem',
+    fontFamily: 'Comic Sans MS, cursive, sans-serif',
+    transform: 'rotate(-1deg)'
+  }}>
+    <div style={{ fontSize: '0.8rem', fontWeight: '700', marginBottom: '0.2rem' }}>
+      ⚠️ Low Balance
+    </div>
+    <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>
+      {(walletBalance / 1e18).toFixed(3)} MON
+    </div>
+  </div>
+)}
+
+{/* Wallet Low Balance Warning - Mobile (Current Compact Style) */}
+{authenticated && (walletBalance / 1e18) < 0.04 && window.innerWidth <= 768 && (
+  <div style={{
+    position: 'fixed',
+    bottom: '15px',
+    left: '15px',
+    background: '#ffc107',
+    color: '#2c2c2c',
+    padding: '0.6rem 0.8rem',
+    borderRadius: '8px',
+    border: '2px solid #2c2c2c',
+    boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)',
+    zIndex: 1000,
+    maxWidth: '200px',
+    fontSize: '0.75rem',
+    fontFamily: 'Comic Sans MS, cursive, sans-serif',
+    transform: 'rotate(-1deg)'
+  }}>
+    <div style={{ fontSize: '0.8rem', fontWeight: '700', marginBottom: '0.2rem' }}>
+      ⚠️ Low Balance
+    </div>
+    <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>
+      {(walletBalance / 1e18).toFixed(3)} MON
+    </div>
+  </div>
+)}
 
           {/* Instructions Popup for First-Time Users */}
           {showInstructions && (

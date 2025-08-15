@@ -10,7 +10,7 @@ export default function App({ Component, pageProps }) {
     setIsClient(true);
   }, []);
 
-  // During SSR or if no Privy App ID, render without Privy provider
+  //During SSR or if no Privy App ID, render without Privy provider
   if (!isClient || !process.env.NEXT_PUBLIC_PRIVY_APP_ID) {
     return <Component {...pageProps} />;
   }
