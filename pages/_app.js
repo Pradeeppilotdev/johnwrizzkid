@@ -24,7 +24,10 @@ export default function App({ Component, pageProps }) {
           requireUserPasswordOnCreate: false,
           noPromptOnSignature: true,
         },
-        loginMethods: ['email', 'wallet'],
+        // Force Monad Games ID only (email as fallback); use only loginMethodsAndOrder
+        loginMethodsAndOrder: {
+          primary: [`privy:${process.env.NEXT_PUBLIC_MONAD_GAMES_CROSS_APP_ID || 'cmd8euall0037le0my79qpz42'}`, 'email'],
+        },
         appearance: {
           theme: 'dark',
           accentColor: '#6366f1',

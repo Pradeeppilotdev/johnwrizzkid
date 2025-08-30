@@ -2,5 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/api/leaderboard": "pages/api/leaderboard.js",
+  "/api/leaderboard/simple": "pages/api/leaderboard/simple.js",
+  "/api/monad-games/submit": "pages/api/monad-games/submit.js",
   "/": "pages/index.js"
 }

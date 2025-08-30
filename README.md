@@ -28,6 +28,15 @@ NEXT_PUBLIC_PIMLICO_API_KEY=your_pimlico_api_key_here
 
 # Privy App ID - Get from https://console.privy.io/
 NEXT_PUBLIC_PRIVY_APP_ID=your_privy_app_id_here
+
+# Enable Monad Games ID cross-app login (Provider App ID)
+NEXT_PUBLIC_MONAD_GAMES_CROSS_APP_ID=cmd8euall0037le0my79qpz42
+
+# Server wallet private key (game submitter, never expose on client)
+SERVER_SUBMITTER_PRIVATE_KEY=your_hex_private_key_without_0x
+
+# Monad Games ID contract
+MONAD_GAMES_ID_CONTRACT=0xceCBFF203C8B6044F52CE23D914A1bfD997541A4
 ```
 
 ### 3. Get API Keys
