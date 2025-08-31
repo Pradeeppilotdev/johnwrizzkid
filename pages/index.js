@@ -136,9 +136,10 @@ export default function Home() {
   const [depositAmount, setDepositAmount] = useState('');
   const [hasDeposited, setHasDeposited] = useState(false);
   const [isGameRegistered, setIsGameRegistered] = useState(true);
-  const [enableAutoDeposit, setEnableAutoDeposit] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [globalLeaderboard, setGlobalLeaderboard] = useState([]);
+  const [globalLeaderboardUpdated, setGlobalLeaderboardUpdated] = useState(null);
+  const [isLoadingGlobalLeaderboard, setIsLoadingGlobalLeaderboard] = useState(false);
   const [userSlapCount, setUserSlapCount] = useState(0);
   const [userRank, setUserRank] = useState(0);
   const [userBalance, setUserBalance] = useState(0n); // Contract balance in wei
@@ -651,10 +652,9 @@ export default function Home() {
         setLeaderboard(formattedLeaderboard);
         setUserRank(data.userRank);
         // Fetch global leaderboard in parallel (non-blocking UI)
-        fetch('/api/leaderboard/simple')
-          .then(r => r.ok ? r.json() : null)
-          .then(j => setGlobalLeaderboard(j?.top || []))
-          .catch(() => {});
+        if (privyAddress) {
+          fetchGlobalLeaderboard();
+        }
       } else {
         console.error('Failed to fetch leaderboard:', data.error);
       }
@@ -662,6 +662,48 @@ export default function Home() {
       console.error('Failed to fetch leaderboard:', err);
     } finally {
       isFetchingLeaderboardRef.current = false;
+    }
+  };
+
+  // Fetch global leaderboard from Monad Games ID
+  const fetchGlobalLeaderboard = async () => {
+    if (!privyAddress) {
+      console.log('⚠️ No Privy wallet connected, skipping global leaderboard fetch');
+      return;
+    }
+    
+    try {
+      console.log('🌐 Fetching global leaderboard for user:', privyAddress);
+      setIsLoadingGlobalLeaderboard(true);
+      setGlobalLeaderboard([]); // Clear current data
+      
+      const response = await fetch(`/api/global-leaderboard?userWallet=${privyAddress}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🏆 Global leaderboard updated:', data);
+        
+        if (data.user && data.user.score > 0) {
+          // Create a single entry for the user
+          setGlobalLeaderboard([{
+            rank: data.user.rank,
+            wallet: data.user.wallet,
+            score: data.user.score,
+            displayName: data.user.displayName,
+            username: data.user.username,
+            gameBreakdown: data.user.gameBreakdown
+          }]);
+        } else {
+          setGlobalLeaderboard([]);
+        }
+        
+        setGlobalLeaderboardUpdated(new Date());
+      } else {
+        console.error('Failed to fetch global leaderboard:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching global leaderboard:', error);
+    } finally {
+      setIsLoadingGlobalLeaderboard(false);
     }
   };
 
@@ -1214,6 +1256,17 @@ export default function Home() {
               scoreDelta: 1,
               txDelta: 1,
             }),
+          }).then(() => {
+            // Refresh global leaderboard after score submission
+            setTimeout(() => {
+              fetch('/api/leaderboard/simple')
+                .then(r => r.ok ? r.json() : null)
+                .then(j => {
+                  setGlobalLeaderboard(j?.top || []);
+                  setGlobalLeaderboardUpdated(new Date());
+                })
+                .catch(() => {});
+            }, 2000); // Small delay to allow blockchain update
           }).catch(() => {});
         } catch {}
 
@@ -1701,34 +1754,24 @@ const tryFirstTimeAirdrop = useCallback(async () => {
           {/* Clean Main Game Area */}
           <div className={styles.gameArea}>
             <div className={styles.gameContainer}>
-              {/* Left Side - Wallet & Deposit */}
+              {/* Left Side - Wallet & Deposit - Compact */}
               <div className={styles.controlsPanel} style={{ transform: 'rotate(1deg)' }}>
                 <h3>💰 Wallet & Deposit</h3>
 
-                {/* Contract and Wallet Balance
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.5rem', color: '#2c2c2c' }}>
-                    Contract Balance: <span style={{ color: '#4ecdc4', fontWeight: '700' }}>{userBalanceMon.toFixed(4)} MON</span>
-                  </div>
-                  <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.5rem', color: '#2c2c2c' }}>
-                    Your Wallet: <span style={{ color: '#4ecdc4', fontWeight: '700' }}>{embeddedBalanceMon != null ? `${embeddedBalanceMon} MON` : '...'}</span>
-                  </div>
-                </div> */}
-
-                {/* Wallet Address */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.3rem' }}>
-                    Your Wallet Address:
+                {/* Compact Wallet Address */}
+                <div style={{ marginBottom: '0.8rem' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#666', marginBottom: '0.3rem' }}>
+                    Wallet Address:
                   </div>
                   <div style={{
                     background: '#f8f8f8',
                     border: '2px solid #2c2c2c',
-                    borderRadius: '8px',
-                    padding: '0.5rem',
-                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    padding: '0.4rem',
+                    fontSize: '0.6rem',
                     fontFamily: 'Monaco, monospace',
                     wordBreak: 'break-all',
-                    marginBottom: '0.5rem'
+                    marginBottom: '0.4rem'
                   }}>
                     {appEmbeddedAddress || 'Loading...'}
                   </div>
@@ -1738,9 +1781,9 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                       background: '#4ecdc4',
                       color: '#2c2c2c',
                       border: '2px solid #2c2c2c',
-                      borderRadius: '8px',
-                      padding: '0.3rem 0.8rem',
-                      fontSize: '0.8rem',
+                      borderRadius: '6px',
+                      padding: '0.3rem 0.6rem',
+                      fontSize: '0.7rem',
                       fontWeight: '700',
                       cursor: 'pointer',
                       boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)',
@@ -1751,11 +1794,9 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                   </button>
                 </div>
 
-
-
-                {/* Auto-Deposit Button (if needed) */}
+                {/* Compact Auto-Deposit Button */}
                 {embeddedBalanceMon >= 0.2 && userBalanceMon < 0.005 && (
-                  <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ marginBottom: '0.8rem' }}>
                     <button
                       onClick={() => handleAutoDeposit(0.2)}
                       disabled={!walletClient.current}
@@ -1763,12 +1804,12 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                         background: '#ff6b6b',
                         color: 'white',
                         border: '2px solid #2c2c2c',
-                        borderRadius: '15px',
-                        padding: '0.8rem',
-                        fontSize: '0.9rem',
+                        borderRadius: '8px',
+                        padding: '0.5rem',
+                        fontSize: '0.8rem',
                         cursor: 'pointer',
                         fontWeight: '600',
-                        boxShadow: '3px 3px 0px rgba(44, 44, 44, 0.3)',
+                        boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)',
                         width: '100%'
                       }}
                     >
@@ -1777,9 +1818,9 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                   </div>
                 )}
 
-                {/* Frame Slider */}
-                <div>
-                  <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.5rem', color: '#666' }}>
+                {/* Compact Frame Slider */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '600', marginBottom: '0.4rem', color: '#666' }}>
                     Frame: {currentFrame}/162
                   </div>
                   <input
@@ -1790,6 +1831,227 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                     onChange={(e) => setCurrentFrame(parseInt(e.target.value))}
                     style={{ width: '100%' }}
                   />
+                </div>
+
+                {/* Compact Global Stats Section */}
+                <div style={{
+                  marginTop: '0.8rem',
+                  background: '#fff',
+                  border: '2px solid #2c2c2c',
+                  borderRadius: '8px',
+                  padding: '0.6rem',
+                  boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.2)',
+                  fontFamily: 'Comic Sans MS, cursive, sans-serif'
+                }}>
+                  {/* Compact Header */}
+                  <div style={{ 
+                    textAlign: 'center', 
+                    marginBottom: '0.6rem'
+                  }}>
+                    <h5 style={{ 
+                      margin: 0, 
+                      color: '#2c2c2c', 
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold'
+                    }}>
+                      🌐 Global Stats
+                    </h5>
+                  </div>
+
+                  {/* Compact Controls */}
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '0.4rem', 
+                    marginBottom: '0.6rem'
+                  }}>
+                    <button
+                      onClick={fetchGlobalLeaderboard}
+                      disabled={isLoadingGlobalLeaderboard}
+                      style={{
+                        background: isLoadingGlobalLeaderboard ? '#ccc' : '#4ecdc4',
+                        color: 'white',
+                        border: '2px solid #2c2c2c',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.5rem',
+                        fontSize: '0.65rem',
+                        cursor: isLoadingGlobalLeaderboard ? 'not-allowed' : 'pointer',
+                        fontWeight: 'bold',
+                        flex: 1
+                      }}
+                    >
+                      {isLoadingGlobalLeaderboard ? '⏳' : '🔄'}
+                    </button>
+                    <a 
+                      href="https://monad-games-id-site.vercel.app/" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      style={{ 
+                        fontSize: '0.65rem', 
+                        color: '#4ecdc4', 
+                        textDecoration: 'none',
+                        padding: '0.3rem 0.5rem',
+                        border: '2px solid #4ecdc4',
+                        borderRadius: '6px',
+                        background: '#fff',
+                        fontWeight: 'bold',
+                        textAlign: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      Username
+                    </a>
+                  </div>
+
+                  {/* Compact Last Updated */}
+                  {globalLeaderboard.length > 0 && globalLeaderboardUpdated && (
+                    <div style={{ 
+                      fontSize: '0.55rem', 
+                      color: '#666', 
+                      textAlign: 'center', 
+                      marginBottom: '0.5rem',
+                      padding: '0.15rem',
+                      background: '#f8f9fa',
+                      borderRadius: '4px',
+                      border: '1px solid #e9ecef'
+                    }}>
+                      🕐 {globalLeaderboardUpdated.toLocaleTimeString()}
+                    </div>
+                  )}
+
+                  {/* Compact Content */}
+                  {globalLeaderboard.length === 0 ? (
+                    <div style={{ 
+                      textAlign: 'center', 
+                      color: '#666', 
+                      padding: '0.5rem',
+                      background: '#f8f9fa',
+                      borderRadius: '6px',
+                      border: '1px solid #e9ecef'
+                    }}>
+                      <div style={{ marginBottom: '0.2rem', fontSize: '0.7rem' }}>
+                        {isLoadingGlobalLeaderboard ? '⏳ Loading...' : '🌐 Connect wallet'}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {globalLeaderboard.map((entry, idx) => (
+                        <div key={idx} style={{
+                          padding: '0.5rem',
+                          marginBottom: '0.4rem',
+                          background: '#f8f9fa',
+                          border: '2px solid #2c2c2c',
+                          borderRadius: '6px',
+                          position: 'relative'
+                        }}>
+                          {/* Compact Rank and Score */}
+                          <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            marginBottom: '0.4rem',
+                            paddingRight: '2rem' // Add right padding to avoid overlap with YOU badge
+                          }}>
+                            <div style={{ 
+                              fontWeight: 'bold', 
+                              color: '#2c2c2c', 
+                              fontSize: '0.7rem'
+                            }}>
+                              #{entry.rank}
+                            </div>
+                            <div style={{ 
+                              fontWeight: 'bold', 
+                              color: '#4ecdc4', 
+                              fontSize: '0.7rem'
+                            }}>
+                              {entry.score}
+                            </div>
+                          </div>
+                          
+                          {/* Compact Username */}
+                          <div style={{ 
+                            textAlign: 'center', 
+                            marginBottom: '0.4rem',
+                            padding: '0.3rem',
+                            background: '#fff',
+                            borderRadius: '4px',
+                            border: '1px solid #2c2c2c'
+                          }}>
+                            <div style={{ 
+                              fontSize: '0.7rem', 
+                              fontWeight: 'bold',
+                              color: '#2c2c2c'
+                            }}>
+                              {entry.displayName}
+                            </div>
+                          </div>
+                          
+                          {/* Compact Game Breakdown - Top 4 Games */}
+                          {entry.gameBreakdown && Object.keys(entry.gameBreakdown).length > 0 && (
+                            <div style={{ 
+                              marginTop: '0.4rem',
+                              padding: '0.4rem',
+                              background: '#fff',
+                              borderRadius: '4px',
+                              border: '1px solid #2c2c2c'
+                            }}>
+                              <div style={{ 
+                                fontSize: '0.6rem', 
+                                fontWeight: 'bold',
+                                color: '#2c2c2c',
+                                marginBottom: '0.2rem',
+                                textAlign: 'center'
+                              }}>
+                                🎮 Games:
+                              </div>
+                              {Object.entries(entry.gameBreakdown).slice(0, 4).map(([game, score]) => (
+                                <div key={game} style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  fontSize: '0.6rem',
+                                  marginBottom: '0.1rem',
+                                  padding: '0.1rem 0.3rem',
+                                  background: '#f8f9fa',
+                                  borderRadius: '3px'
+                                }}>
+                                  <span style={{ color: '#2c2c2c', fontWeight: '600' }}>{game.length > 15 ? game.substring(0, 15) + '...' : game}</span>
+                                  <span style={{ fontWeight: 'bold', color: '#4ecdc4' }}>{score}</span>
+                                </div>
+                              ))}
+                              {Object.keys(entry.gameBreakdown).length > 4 && (
+                                <div style={{
+                                  fontSize: '0.55rem',
+                                  color: '#666',
+                                  textAlign: 'center',
+                                  fontStyle: 'italic',
+                                  marginTop: '0.2rem'
+                                }}>
+                                  +{Object.keys(entry.gameBreakdown).length - 4} more
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Compact YOU Badge */}
+                          <div style={{
+                            position: 'absolute',
+                            right: '-1px',
+                            top: '-1px',
+                            background: '#4ecdc4',
+                            color: 'white',
+                            fontSize: '0.5rem',
+                            padding: '0.1rem 0.3rem',
+                            borderRadius: '0 6px 0 6px',
+                            fontWeight: 'bold',
+                            border: '1px solid #2c2c2c'
+                          }}>
+                            YOU
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1864,7 +2126,7 @@ const tryFirstTimeAirdrop = useCallback(async () => {
               <div className={styles.controlsPanel} style={{ transform: 'rotate(-1deg)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <h3 style={{ margin: 0 }}>🏆 Leaderboard</h3>
-                                       <button
+                                       {/* <button
                       onClick={async () => {
                         // Force refresh from backend
                         fetchLeaderboard(true);
@@ -1883,7 +2145,7 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                     }}
                   >
                     🔄 Refresh
-                   </button>
+                   </button> */}
                 </div>
 
                 {/* Small doodle instruction text */}
@@ -2006,46 +2268,7 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                   )}
                 </div>
 
-                {/* Global Leaderboard (Monad Games ID) */}
-                <div style={{
-                  marginTop: '0.75rem',
-                  border: '2px dashed #2c2c2c',
-                  borderRadius: '12px',
-                  padding: '0.75rem',
-                  background: '#fafafa',
-                  boxShadow: '6px 6px 0 #2c2c2c'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <h4 style={{ margin: 0 }}>🌐 Global Leaderboard</h4>
-                    <a href="https://monad-games-id-site.vercel.app/" target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem' }}>Reserve Username</a>
-                  </div>
-                  {globalLeaderboard.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: '#666' }}>No global data yet.</div>
-                  ) : (
-                    globalLeaderboard.slice(0, 10).map((entry, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '0.5rem 0.75rem',
-                        marginBottom: '0.5rem',
-                        background: '#fff',
-                        border: '2px solid #2c2c2c',
-                        borderRadius: '8px'
-                      }}>
-                        <div style={{ fontWeight: '600', color: '#2c2c2c' }}>
-                          #{entry.rank || idx + 1}
-                        </div>
-                        <div style={{ fontFamily: 'Monaco, monospace', fontSize: '0.8rem', color: '#555' }}>
-                          {entry.username || entry.address || 'Player'}
-                        </div>
-                        <div style={{ fontWeight: '600', color: '#4ecdc4' }}>
-                          {entry.score || entry.slapCount || 0}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                
               </div>
 
             </div>
@@ -2577,17 +2800,9 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                     </p>
                   </div>
 
-                  <div style={{
-                    background: '#f8f8f8',
-                    border: '2px solid #4ecdc4',
-                    borderRadius: '10px',
-                    padding: '1rem',
-                    marginBottom: '1.5rem'
-                  }}>
-                    <p style={{ color: '#333', margin: 0, fontSize: '0.9rem', textAlign: 'center' }}>
-                      💡 <strong>Pro Tip:</strong> Watch your session punch counter above the frame!
-                    </p>
-                  </div>
+
+
+
                 </div>
 
                 <div style={{ textAlign: 'center' }}>

@@ -685,17 +685,17 @@
   background: white;
   border: 3px solid #2c2c2c;
   border-radius: 20px;
-  padding: 2rem;
+  padding: 1.5rem;
   box-shadow: 8px 8px 0px rgba(44, 44, 44, 0.1);
   transform: rotate(1deg);
   max-width: 300px;
 }
 
 .controlsPanel h3 {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   font-weight: 900;
   color: #2c2c2c;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   transform: rotate(-2deg);
   text-align: center;
 }
@@ -714,7 +714,7 @@
 .controlsPanel {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .depositSection {
