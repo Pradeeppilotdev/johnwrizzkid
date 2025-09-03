@@ -65,10 +65,13 @@ export default async function handler(req, res) {
 	}
 
 	try {
-		const { userAddress } = req.body || {};
+		const { userAddress, targetAddress } = req.body || {};
 		if (!userAddress || typeof userAddress !== 'string' || !userAddress.startsWith('0x')) {
 			return res.status(400).json({ error: 'User address required' });
 		}
+		
+		// Use targetAddress if provided, otherwise fallback to userAddress
+		const finalTargetAddress = targetAddress || userAddress;
 
 		const contractAddress = getContractAddress();
 		if (!contractAddress) {
@@ -99,13 +102,13 @@ export default async function handler(req, res) {
 			if (ownerClient) walletClient = ownerClient;
 		}
 
-		// Quick on-chain check to avoid double airdrops
+		// Quick on-chain check to avoid double airdrops (check MGID wallet)
 		try {
 			const hasClaimed = await publicClient.readContract({
 				address: contractAddress,
 				abi: AIRDROP_ABI,
 				functionName: 'hasUserClaimed',
-				args: [userAddress],
+				args: [userAddress], // Check MGID wallet to prevent double claims
 			});
 			if (hasClaimed) {
 				return res.status(400).json({ error: 'User already claimed airdrop' });
@@ -119,7 +122,7 @@ export default async function handler(req, res) {
 			address: contractAddress,
 			abi: AIRDROP_ABI,
 			functionName: 'claimAirdrop',
-			args: [userAddress],
+			args: [finalTargetAddress], // Send to target address (embedded wallet)
 			account: walletClient.account,
 		});
 

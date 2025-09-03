@@ -523,9 +523,23 @@ export default function Home() {
         addTransactionNotification('success', '🎉 Wallet Connected!', null);
         setTxStatus('✅ Privy embedded wallet ready! Gasless transactions enabled (Monad 2048 approach)');
 
-        // Attempt first-time airdrop (once per session) if configured
-        if (!hasAttemptedAirdrop && airdropContractAddress) {
-          setTimeout(() => tryFirstTimeAirdrop(), 2000); // Small delay to ensure everything is ready
+        console.log('✅ Wallet setup complete:', {
+          walletClient: !!walletClient.current,
+          appEmbeddedAddress,
+          walletsLength: wallets.length
+        });
+
+        // Attempt first-time airdrop automatically for new users (based on embedded wallet)
+        if (authenticated && appEmbeddedAddress) {
+          const keyAddr = appEmbeddedAddress.toLowerCase();
+          const alreadyClaimed = localStorage.getItem(`johnwrizzkid-airdrop-claimed-${keyAddr}`);
+          if (!alreadyClaimed) {
+            console.log('🎁 New user detected, triggering automatic airdrop...');
+            tryFirstTimeAirdrop();
+          } else {
+            console.log('✅ User already received airdrop');
+            setHasAttemptedAirdrop(true);
+          }
         }
       } catch (error) {
         console.error('❌ Failed to setup wallet client:', error);
@@ -552,10 +566,17 @@ export default function Home() {
         }
       } catch {}
     };
+    
+    console.log('💰 Balance fetch effect triggered:', {
+      privyAddress,
+      appEmbeddedAddress,
+      walletsLength: wallets.length
+    });
+    
     fetchBalances();
     const id = setInterval(fetchBalances, 10000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [privyAddress, appEmbeddedAddress]);
+  }, [privyAddress, appEmbeddedAddress, wallets.length]);
 
   // Fetch leaderboard and user data when Privy wallet is ready
   useEffect(() => {
@@ -569,6 +590,23 @@ export default function Home() {
       return () => clearTimeout(timer);
     }
   }, [wallets, privyAddress]);
+
+  // Automatic airdrop check for new users (embedded wallet based)
+  useEffect(() => {
+    if (authenticated && appEmbeddedAddress && !hasAttemptedAirdrop) {
+      const keyAddr = appEmbeddedAddress.toLowerCase();
+      const alreadyClaimed = localStorage.getItem(`johnwrizzkid-airdrop-claimed-${keyAddr}`);
+      if (!alreadyClaimed) {
+        console.log('🎁 New user detected in useEffect, triggering automatic airdrop...');
+        const timer = setTimeout(() => {
+          tryFirstTimeAirdrop();
+        }, 1500);
+        return () => clearTimeout(timer);
+      } else {
+        setHasAttemptedAirdrop(true);
+      }
+    }
+  }, [authenticated, appEmbeddedAddress, hasAttemptedAirdrop]);
 
   // Test smart account functionality
   const testSmartAccount = async () => {
@@ -797,8 +835,26 @@ export default function Home() {
 
   // Auto-deposit function using embedded wallet approach
   const handleAutoDeposit = async (amount) => {
-    if (!walletClient.current || !authenticated || !appEmbeddedAddress) return;
-    if (isAutoDepositing.current) return;
+    console.log('🚀 handleAutoDeposit called with:', {
+      amount,
+      authenticated,
+      appEmbeddedAddress,
+      isAutoDepositing: isAutoDepositing.current,
+      walletsLength: wallets.length
+    });
+    
+    if (!authenticated || !appEmbeddedAddress || !wallets.length) {
+      console.log('❌ Auto-deposit blocked:', {
+        notAuthenticated: !authenticated,
+        noEmbeddedAddress: !appEmbeddedAddress,
+        noWallets: !wallets.length
+      });
+      return;
+    }
+    if (isAutoDepositing.current) {
+      console.log('❌ Auto-deposit already in progress');
+      return;
+    }
     
     // For auto-deposit, we'll use the embedded wallet to deposit to contract
     // This ensures the embedded wallet has funds for gameplay
@@ -874,11 +930,34 @@ export default function Home() {
         chainId: '0x' + monadTestnet.id.toString(16),
       };
 
-      // Sign transaction using Privy
-      const signedTransaction = await walletClient.current.request({
+      // Sign transaction using Privy embedded wallet
+      console.log('🔍 Looking for embedded wallet:', {
+        appEmbeddedAddress,
+        availableWallets: wallets.map(w => ({ address: w.address, type: w.walletClientType }))
+      });
+      
+      const embeddedWalletObj = wallets.find(w => w.address?.toLowerCase() === appEmbeddedAddress.toLowerCase());
+      if (!embeddedWalletObj) {
+        console.error('❌ Embedded wallet not found in wallets array');
+        throw new Error('Embedded wallet not found');
+      }
+      
+      console.log('✅ Found embedded wallet:', embeddedWalletObj);
+
+      // Use the embedded wallet's signTransaction method
+      let signedTransaction;
+      if (embeddedWalletObj.signTransaction) {
+        signedTransaction = await embeddedWalletObj.signTransaction(txParams);
+      } else if (embeddedWalletObj.getEthereumProvider) {
+        // Fallback to using the provider if signTransaction not available
+        const provider = await embeddedWalletObj.getEthereumProvider();
+        signedTransaction = await provider.request({
         method: 'eth_signTransaction',
         params: [txParams],
       });
+      } else {
+        throw new Error('No signing method available on embedded wallet');
+      }
 
       // Send directly via RPC
       const response = await fetch('https://testnet-rpc.monad.xyz/', {
@@ -900,11 +979,22 @@ export default function Home() {
         const msg = (result.error.message || '').toLowerCase();
         // Retry once if nonce too low: refresh pending nonce and resend
         if (msg.includes('nonce too low')) {
-          const refreshedPending = await publicClient.getTransactionCount({ address: privyAddress, blockTag: 'pending' });
+          const refreshedPending = await publicClient.getTransactionCount({ address: appEmbeddedAddress, blockTag: 'pending' });
           const retryNonce = Math.max(Number(userNonce.current), Number(refreshedPending));
           userNonce.current = BigInt(retryNonce + 1);
           const retryTx = { ...txParams, nonce: '0x' + BigInt(retryNonce).toString(16) };
-          const signedRetry = await walletClient.current.request({ method: 'eth_signTransaction', params: [retryTx] });
+          let signedRetry;
+          if (embeddedWalletObj.signTransaction) {
+            signedRetry = await embeddedWalletObj.signTransaction(retryTx);
+          } else if (embeddedWalletObj.getEthereumProvider) {
+            const provider = await embeddedWalletObj.getEthereumProvider();
+            signedRetry = await provider.request({
+              method: 'eth_signTransaction',
+              params: [retryTx],
+            });
+          } else {
+            throw new Error('No signing method available on embedded wallet');
+          }
           const resp2 = await fetch('https://testnet-rpc.monad.xyz/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_sendRawTransaction', params: [signedRetry] }) });
           const res2 = await resp2.json();
           if (res2.error) throw new Error(`RPC Error: ${res2.error.message}`);
@@ -922,10 +1012,18 @@ export default function Home() {
             maxFeePerGas: '0x' + bumpFee.toString(16),
             maxPriorityFeePerGas: '0x' + bumpPriority.toString(16),
           };
-          const signedBumped = await walletClient.current.request({
-            method: 'eth_signTransaction',
-            params: [bumpedTx],
-          });
+          let signedBumped;
+          if (embeddedWalletObj.signTransaction) {
+            signedBumped = await embeddedWalletObj.signTransaction(bumpedTx);
+          } else if (embeddedWalletObj.getEthereumProvider) {
+            const provider = await embeddedWalletObj.getEthereumProvider();
+            signedBumped = await provider.request({
+              method: 'eth_signTransaction',
+              params: [bumpedTx],
+            });
+          } else {
+            throw new Error('No signing method available on embedded wallet');
+          }
           const resp2 = await fetch('https://testnet-rpc.monad.xyz/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1106,6 +1204,22 @@ export default function Home() {
         }
       }
 
+      // Check embedded wallet balance for gas fees
+      const embeddedBalance = embeddedBalanceMon || 0;
+      const mgidBalance = mgidBalanceMon || 0;
+      
+      console.log(`💰 Wallet balances - Embedded: ${embeddedBalance} MON, MGID: ${mgidBalance} MON`);
+      
+      // If embedded wallet has insufficient balance for gas but MGID has enough, use MGID
+      const useMGIDForFrame = embeddedBalance < 0.01 && mgidBalance >= 0.01;
+      
+      if (useMGIDForFrame) {
+        console.log('🔄 Using MGID wallet for frame transaction (embedded wallet low on gas)');
+      } else if (embeddedBalance < 0.01) {
+        console.log('❌ Both wallets have insufficient balance for gas fees');
+        return;
+      }
+
       // Map frontend frames to contract frames for compatibility
       // Frontend Frame 2 → Contract Frame 1 (slap start)
       // Frontend Frame 161 → Contract Frame 162 (slap complete)
@@ -1132,100 +1246,131 @@ export default function Home() {
         transport: http('https://testnet-rpc.monad.xyz/'),
       });
 
-      // Dynamic gas limit based on frame complexity
-      let gasLimit;
-      if (frameNumber === 161) {
-        gasLimit = '0x7A120'; // 500,000 gas for Frame 161 (leaderboard updates, slap completion)
-        console.log('🎯 Using high gas limit for Frame 161 completion');
-      } else if (frameNumber === 2) {
-        gasLimit = '0x30D40'; // 200,000 gas for Frame 2 (slap start)
-        console.log('🥊 Using medium gas limit for Frame 2 start');
-      } else {
-        gasLimit = '0x186A0'; // 100,000 gas for other frames (shouldn't be used)
-        console.log('⚡ Using standard gas limit for Frame', frameNumber);
-      }
-
-      const embeddedWalletObj = appEmbeddedAddress
-        ? wallets.find(w => w.address?.toLowerCase() === appEmbeddedAddress.toLowerCase())
-        : null;
-      const provider = embeddedWalletObj && typeof embeddedWalletObj.getEthereumProvider === 'function'
-        ? await embeddedWalletObj.getEthereumProvider()
-        : null;
-
-      if (embeddedWalletObj && provider) {
-        // Secondary: direct sign + raw RPC send via embedded wallet provider (no modal)
-        console.log('🛠 Using direct sign + raw RPC send via embedded wallet');
-        const walletClient = createWalletClient({
-          chain: monadTestnet,
-          transport: custom(provider),
-        });
-        // Estimate and bump gas to avoid low maxFee errors
-        const baseGasPrice = await publicClient.getGasPrice();
-        const effectiveGasPrice = baseGasPrice * 10n; // 10x bump to avoid mempool rejection on Monad
-        const nonce = await publicClient.getTransactionCount({ address: embeddedWalletObj.address });
-        const signed = await walletClient.signTransaction({
-          account: embeddedWalletObj.address,
+      // Estimate gas from node with modest safety buffer and cap
+      const fromAddressForEstimate = useMGIDForFrame ? privyAddress : appEmbeddedAddress;
+      const estimatedGasBigInt = await publicClient.estimateGas({
+        account: fromAddressForEstimate,
         to: contractAddress,
         data: viewFrameData,
-          gas: parseInt(gasLimit, 16),
-          maxFeePerGas: effectiveGasPrice,
-          maxPriorityFeePerGas: effectiveGasPrice / 10n,
-          nonce,
-          value: 0n,
-          chain: monadTestnet,
-        });
-        const response = await fetch(monadTestnet.rpcUrls.default.http[0], {
-        method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 1,
-          jsonrpc: '2.0',
-          method: 'eth_sendRawTransaction',
-            params: [signed],
-        }),
+        value: 0n,
       });
-        let result = await response.json();
-        if (result.error && /maxFeePerGas/i.test(result.error.message || '')) {
-          // Single retry with 2x fees
-          const retrySigned = await walletClient.signTransaction({
+      const safetyNumerator = frameNumber === 161 ? 15n : 12n; // 1.5x for completion; 1.2x for start
+      const safetyDenominator = 10n;
+      let gasLimitBigInt = (estimatedGasBigInt * safetyNumerator) / safetyDenominator;
+      const minGas = 50000n;
+      const maxGasCap = 600000n; // cap to avoid overpaying
+      if (gasLimitBigInt < minGas) gasLimitBigInt = minGas;
+      if (gasLimitBigInt > maxGasCap) gasLimitBigInt = maxGasCap;
+      const gasLimit = '0x' + gasLimitBigInt.toString(16);
+      console.log('⛽ estimate:', estimatedGasBigInt.toString(), '→ gasLimit:', gasLimit);
+
+      if (useMGIDForFrame) {
+        // Use MGID wallet for frame transaction (embedded wallet low on gas)
+        console.log('🔄 Using MGID wallet for frame transaction');
+      const gasPrice = await publicClient.getGasPrice();
+        const request = {
+          chainId: monadTestnet.id,
+        to: contractAddress,
+          value: 0,
+        data: viewFrameData,
+          gasLimit: parseInt(gasLimit, 16),
+          gasPrice: Number(gasPrice * 2n),
+        };
+        txHash = await crossAppSendTransaction(request);
+        console.log('✅ MGID wallet transaction sent:', txHash);
+      } else {
+        // Use embedded wallet for one-click transactions
+        const embeddedWalletObj = appEmbeddedAddress
+          ? wallets.find(w => w.address?.toLowerCase() === appEmbeddedAddress.toLowerCase())
+          : null;
+        const provider = embeddedWalletObj && typeof embeddedWalletObj.getEthereumProvider === 'function'
+          ? await embeddedWalletObj.getEthereumProvider()
+          : null;
+
+        if (embeddedWalletObj && provider) {
+          // Secondary: direct sign + raw RPC send via embedded wallet provider (no modal)
+          console.log('🛠 Using direct sign + raw RPC send via embedded wallet');
+          const walletClient = createWalletClient({
+            chain: monadTestnet,
+            transport: custom(provider),
+          });
+          // Moderate gas fees
+          const baseGasPrice = await publicClient.getGasPrice();
+          let maxFeePerGas = baseGasPrice * 2n; // 2x current
+          let maxPriorityFeePerGas = baseGasPrice / 10n; // small tip
+          const maxGweiCap = 300n * 10n ** 9n; // 300 gwei cap
+          if (maxFeePerGas > maxGweiCap) maxFeePerGas = maxGweiCap;
+          if (maxPriorityFeePerGas > maxFeePerGas / 2n) {
+            maxPriorityFeePerGas = maxFeePerGas / 2n;
+          }
+          const nonce = await publicClient.getTransactionCount({ address: embeddedWalletObj.address });
+          const signed = await walletClient.signTransaction({
             account: embeddedWalletObj.address,
             to: contractAddress,
             data: viewFrameData,
             gas: parseInt(gasLimit, 16),
-            maxFeePerGas: effectiveGasPrice * 2n,
-            maxPriorityFeePerGas: (effectiveGasPrice * 2n) / 10n,
+            maxFeePerGas,
+            maxPriorityFeePerGas,
             nonce,
             value: 0n,
             chain: monadTestnet,
           });
-          const retryResp = await fetch(monadTestnet.rpcUrls.default.http[0], {
-            method: 'POST',
+          const response = await fetch(monadTestnet.rpcUrls.default.http[0], {
+        method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'eth_sendRawTransaction', params: [retrySigned] }),
-          });
-          result = await retryResp.json();
-        }
-        if (result.error) throw new Error(`RPC Error: ${result.error.message}`);
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: '2.0',
+          method: 'eth_sendRawTransaction',
+              params: [signed],
+        }),
+      });
+          let result = await response.json();
+          if (result.error && /maxFeePerGas|fee/i.test(result.error.message || '')) {
+             // Single retry with 2x fees
+             const retrySigned = await walletClient.signTransaction({
+               account: embeddedWalletObj.address,
+               to: contractAddress,
+               data: viewFrameData,
+               gas: parseInt(gasLimit, 16),
+               maxFeePerGas: maxFeePerGas * 2n,
+               maxPriorityFeePerGas: maxPriorityFeePerGas * 2n,
+               nonce,
+               value: 0n,
+               chain: monadTestnet,
+             });
+            const retryResp = await fetch(monadTestnet.rpcUrls.default.http[0], {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'eth_sendRawTransaction', params: [retrySigned] }),
+            });
+            result = await retryResp.json();
+          }
+          if (result.error) throw new Error(`RPC Error: ${result.error.message}`);
       txHash = result.result;
-        console.log('✅ Direct RPC transaction sent:', txHash);
-      } else if (appEmbeddedAddress && typeof privySendTransaction === 'function') {
-        // Fallback: one-click using app's embedded wallet API
-        console.log('🚀 Using app embedded wallet sendTransaction (no modal)');
-        const gasPrice = await publicClient.getGasPrice();
-        const request = {
-          chainId: monadTestnet.id,
-          to: contractAddress,
-          value: 0,
-          data: viewFrameData,
-          gasLimit: parseInt(gasLimit, 16),
-          gasPrice: Number(gasPrice),
-        };
-        txHash = await privySendTransaction(request);
-        console.log('✅ Embedded wallet transaction sent:', txHash);
-      } else {
-        // Do NOT fall back to cross-app wallet for frames to avoid modal popups
-        console.warn('⚠️ Embedded wallet not ready for frame TX; skipping to avoid popup');
-        throw new Error('Embedded wallet not ready. Please wait a moment and try again.');
+          console.log('✅ Direct RPC transaction sent:', txHash);
+        } else if (appEmbeddedAddress && typeof privySendTransaction === 'function') {
+          // Fallback: one-click using app's embedded wallet API
+          console.log('🚀 Using app embedded wallet sendTransaction (no modal)');
+          const gasPrice = await publicClient.getGasPrice();
+          let maxFeePerGasSend = gasPrice * 2n;
+          const maxGweiCapSend = 300n * 10n ** 9n;
+          if (maxFeePerGasSend > maxGweiCapSend) maxFeePerGasSend = maxGweiCapSend;
+          const request = {
+            chainId: monadTestnet.id,
+            to: contractAddress,
+            value: 0,
+            data: viewFrameData,
+            gasLimit: parseInt(gasLimit, 16),
+            gasPrice: Number(maxFeePerGasSend),
+          };
+          txHash = await privySendTransaction(request);
+          console.log('✅ Embedded wallet transaction sent:', txHash);
+        } else {
+          // Do NOT fall back to cross-app wallet for frames to avoid modal popups
+          console.warn('⚠️ Embedded wallet not ready for frame TX; skipping to avoid popup');
+          throw new Error('Embedded wallet not ready. Please wait a moment and try again.');
+        }
       }
 
       // Add transaction notification
@@ -1559,6 +1704,70 @@ export default function Home() {
     }
   };
 
+  // Share score on X (Twitter)
+  const shareOnX = () => {
+    const gameName = 'JohnWRizzKid';
+    const score = userSlapCount;
+    const rank = userRank > 0 ? `Rank #${userRank}` : '';
+    const userDisplayName = username || 'Anonymous';
+    
+    // Create share text
+    let shareText = `🎮 Just completed ${gameName} with ${score} punches!`;
+    if (rank) {
+      shareText += ` ${rank}`;
+    }
+    shareText += ` 🥊\n\nPlay at: johnwrizzkid.vercel.app\n\n#JohnWRizzKid #Monad #Web3Gaming`;
+    
+    // Create share URL for X
+    const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+    
+    // Open in new tab
+    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+    
+    // Show success notification
+    addTransactionNotification('success', '🐦 Shared on X!', null);
+  };
+
+  // Share global stats on X (Twitter)
+  const shareGlobalStats = () => {
+    if (globalLeaderboard.length === 0) {
+      addTransactionNotification('info', '🌐 Load global stats first', null);
+      return;
+    }
+    
+    const entry = globalLeaderboard[0]; // Get the user's stats
+    const gameName = 'JohnWRizzKid';
+    const globalRank = entry.rank;
+    const totalScore = entry.score;
+    const userDisplayName = entry.displayName || 'Anonymous';
+    
+    // Create share text for global achievements
+    let shareText = `🏆 ${userDisplayName} is #${globalRank} globally in ${gameName}!`;
+    shareText += `\nTotal Score: ${totalScore.toLocaleString()}`;
+    
+    // Add top games if available
+    if (entry.gameBreakdown) {
+      const topGames = Object.entries(entry.gameBreakdown)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 3);
+      
+      if (topGames.length > 0) {
+        shareText += `\nTop Games: ${topGames.map(([game, score]) => `${game} (${score})`).join(', ')}`;
+      }
+    }
+    
+    shareText += `\n\nPlay at: johnwrizzkid.vercel.app\n\n#JohnWRizzKid #Monad #Web3Gaming #Leaderboard`;
+    
+    // Create share URL for X
+    const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+    
+    // Open in new tab
+    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+    
+    // Show success notification
+    addTransactionNotification('success', '🌐 Shared global stats on X!', null);
+  };
+
 
 
   // Add transaction notification
@@ -1598,62 +1807,101 @@ const tryFirstTimeAirdrop = useCallback(async () => {
   try {
     console.log('�� Attempting gasless airdrop via relayer...');
     
-    if (!authenticated || !wallets.length || !privyAddress) {
+    if (!authenticated || !wallets.length || !appEmbeddedAddress) {
       console.log('❌ Airdrop skipped - not authenticated or no wallet');
       return;
     }
 
-    // Prevent repeat attempts this session
-    setHasAttemptedAirdrop(true);
-
-    // Check if user already claimed (local check)
-    const storageKey = `johnwrizzkid-airdrop-claimed-${privyAddress.toLowerCase()}`;
-    const alreadyClaimedLocal = localStorage.getItem(storageKey) === '1';
-    
-    if (alreadyClaimedLocal) {
-      console.log('❌ Airdrop skipped - already claimed locally');
+    // Check if already claimed in localStorage first
+    const alreadyClaimed = localStorage.getItem(`johnwrizzkid-airdrop-claimed-${appEmbeddedAddress.toLowerCase()}`);
+    if (alreadyClaimed) {
+      console.log('❌ User already claimed drop (localStorage)');
+      setHasAttemptedAirdrop(true);
       return;
     }
 
-    // Call the relayer API instead of blockchain directly
-    addTransactionNotification('info', 'Claiming welcome Drop (0.8 MON)...', '');
+    // Don't set hasAttemptedAirdrop yet - only set it on success or permanent failure
+
+    // Show single drop popup
+    addTransactionNotification('info', '🎁 Claiming Welcome Drop…', '');
+
+    // Check if user already claimed (on-chain check via relayer API) silently
+    try {
+      // First check if user already claimed on-chain
+      const checkResponse = await fetch('/api/relayer/check-claimed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress: appEmbeddedAddress })
+      });
+
+      if (checkResponse.ok) {
+        const checkResult = await checkResponse.json();
+        if (checkResult.alreadyClaimed) {
+          console.log('❌ User already claimed drop on-chain');
+          localStorage.setItem(`johnwrizzkid-airdrop-claimed-${appEmbeddedAddress.toLowerCase()}`, '1');
+          return;
+        }
+      }
+    } catch (checkError) {
+      console.log('⚠️ Could not check on-chain status, proceeding with airdrop attempt');
+    }
+
+    // Try the relayer API first (no extra popups)
     
+    console.log('🔍 Sending airdrop request:', {
+      userAddress: appEmbeddedAddress,
+      targetAddress: appEmbeddedAddress
+    });
+    
+    try {
     const response = await fetch('/api/relayer/airdrop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userAddress: privyAddress })
+        body: JSON.stringify({ 
+          userAddress: appEmbeddedAddress,
+          targetAddress: appEmbeddedAddress
+        })
     });
 
     const result = await response.json();
+    console.log('🔍 Drop response:', { status: response.status, result });
 
          if (response.ok && result.success) {
-       console.log('🎉 Airdrop claimed successfully! TX Hash:', result.hash);
-       addTransactionNotification('success', '🎉 Drop claimed! +0.8 MON', result.hash);
-       localStorage.setItem(storageKey, '1');
+       console.log('🎉 Drop claimed successfully! TX Hash:', result.hash);
+        addTransactionNotification('success', '🎉 Welcome Drop received! +0.8 MON', result.hash);
+        localStorage.setItem(`johnwrizzkid-airdrop-claimed-${appEmbeddedAddress.toLowerCase()}`, '1');
+        setHasAttemptedAirdrop(true); // Mark as attempted only on success
 
                // Refresh balances after airdrop settles
         setTimeout(async () => {
           fetchUserSlapCount();
           fetchLeaderboard(true);
+          // Also refresh wallet balances
+          const client = createPublicClient({ chain: monadTestnet, transport: http('https://testnet-rpc.monad.xyz/') });
+          if (appEmbeddedAddress) {
+            try {
+              const balE = await client.getBalance({ address: appEmbeddedAddress });
+              setEmbeddedBalanceMon(Number(formatUnits(balE, 18)).toFixed(4));
+            } catch (e) {
+              console.log('Failed to refresh embedded wallet balance:', e);
+            }
+          }
         }, 3000);
+        return;
      } else {
-       // Don't throw error - just log it since airdrop might have succeeded
-       console.log('⚠️ Airdrop response not perfect but might have succeeded:', result);
-       addTransactionNotification('success', '🎉 Drop claimed! +0.8 MON', result.hash || '');
-       localStorage.setItem(storageKey, '1');
-
-                                 // Still refresh balances
-          setTimeout(async () => {
-            fetchUserSlapCount();
-            fetchLeaderboard(true);
-          }, 3000);
+        console.log('⚠️ Relayer drop failed:', result.error || 'Unknown error');
+        addTransactionNotification('error', '❌ Drop failed: ' + (result.error || 'Unknown error'), null);
+        throw new Error(result.error || 'Relayer unavailable');
+      }
+    } catch (relayerError) {
+      console.log('⚠️ Drop failed, relayer not available');
      }
 
   } catch (error) {
-    console.error('❌ Airdrop failed:', error);
-    //addTransactionNotification('error', '❌ Airdrop failed: ' + error.message, null);
+    console.error('❌ Drop failed:', error);
+    addTransactionNotification('error', '❌ Drop failed: ' + error.message, null);
   }
-}, [authenticated, wallets, privyAddress]);
+}, [authenticated, wallets, appEmbeddedAddress, appEmbeddedAddress]);
   // Close instructions and mark as seen
   const closeInstructions = () => {
     setShowInstructions(false);
@@ -1761,7 +2009,7 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                 {/* Compact Wallet Address */}
                 <div style={{ marginBottom: '0.8rem' }}>
                   <div style={{ fontSize: '0.7rem', color: '#666', marginBottom: '0.3rem' }}>
-                    Wallet Address:
+                    Game Wallet Address:
                   </div>
                   <div style={{
                     background: '#f8f8f8',
@@ -1798,8 +2046,17 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                 {embeddedBalanceMon >= 0.2 && userBalanceMon < 0.005 && (
                   <div style={{ marginBottom: '0.8rem' }}>
                     <button
-                      onClick={() => handleAutoDeposit(0.2)}
-                      disabled={!walletClient.current}
+                      onClick={() => {
+                        console.log('🚀 Auto-deposit clicked!', {
+                          embeddedBalanceMon,
+                          userBalanceMon,
+                          authenticated,
+                          appEmbeddedAddress,
+                          walletsLength: wallets.length
+                        });
+                        handleAutoDeposit(0.2);
+                      }}
+                      disabled={!authenticated || !appEmbeddedAddress || !wallets.length}
                       style={{
                         background: '#ff6b6b',
                         color: 'white',
@@ -1818,6 +2075,8 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                   </div>
                 )}
 
+
+
                 {/* Compact Frame Slider */}
                 <div style={{ marginBottom: '0.5rem' }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: '600', marginBottom: '0.4rem', color: '#666' }}>
@@ -1832,6 +2091,8 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                     style={{ width: '100%' }}
                   />
                 </div>
+
+
 
                 {/* Compact Global Stats Section */}
                 <div style={{
@@ -1880,6 +2141,22 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                       }}
                     >
                       {isLoadingGlobalLeaderboard ? '⏳' : '🔄'}
+                    </button>
+                    <button
+                      onClick={() => shareGlobalStats()}
+                      style={{
+                        background: '#1DA1F2',
+                        color: 'white',
+                        border: '2px solid #2c2c2c',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.5rem',
+                        fontSize: '0.65rem',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        flex: 1
+                      }}
+                    >
+                      🐦 Share
                     </button>
                     <a 
                       href="https://monad-games-id-site.vercel.app/" 
@@ -2184,6 +2461,30 @@ const tryFirstTimeAirdrop = useCallback(async () => {
                       Rank #{userRank}
                     </div>
                   )}
+                  
+                  {/* Social Share Button */}
+                  <button
+                    onClick={() => shareOnX()}
+                    style={{
+                      background: '#1DA1F2',
+                      color: 'white',
+                      border: '2px solid #2c2c2c',
+                      borderRadius: '8px',
+                      padding: '0.4rem 0.8rem',
+                      fontSize: '0.7rem',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      marginTop: '0.5rem',
+                      width: '100%',
+                      boxShadow: '2px 2px 0px rgba(44, 44, 44, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem'
+                    }}
+                  >
+                    🐦 Share on X
+                  </button>
                 </div>
 
 

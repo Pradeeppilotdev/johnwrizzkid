@@ -2,7 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/api/relayer/airdrop": "pages/api/relayer/airdrop.js",
   "/api/leaderboard": "pages/api/leaderboard.js",
-  "/api/global-leaderboard": "pages/api/global-leaderboard.js",
+  "/api/relayer/check-claimed": "pages/api/relayer/check-claimed.js",
   "/": "pages/index.js"
 }
